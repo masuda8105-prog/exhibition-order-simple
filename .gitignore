@@ -1,0 +1,21 @@
+node_modules/
+dist/
+
+# Local environment files. Keep only the empty template above.
+.env
+.env.*
+!.env.example
+
+# Non-public source/master/order data.
+products.json
+*.csv
+*.xls
+*.xlsx
+private-data/
+imports/
+orders/
+exports/
+
+# Local Supabase state.
+supabase/.branches/
+supabase/.temp/

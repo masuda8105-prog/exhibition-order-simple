@@ -1,0 +1,288 @@
+:root {
+  --bg: #f4f6f8;
+  --panel: #fff;
+  --ink: #111827;
+  --muted: #667085;
+  --line: #e4e7ec;
+  --accent: #111827;
+  --ok: #067647;
+  --ok-soft: #ecfdf3;
+  --warn: #b54708;
+  --warn-soft: #fffaeb;
+  --danger: #b42318;
+  --danger-soft: #fef3f2;
+  --shadow: 0 8px 28px rgba(16, 24, 40, .08);
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; min-height: 100%; background: var(--bg); color: var(--ink); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans JP", sans-serif; -webkit-font-smoothing: antialiased; }
+body { min-height: 100vh; }
+button, input, select, textarea { font: inherit; }
+button { touch-action: manipulation; cursor: pointer; }
+button:disabled { cursor: not-allowed; opacity: .48; }
+.hidden { display: none !important; }
+.eyebrow { color: var(--muted); font-size: 11px; font-weight: 900; letter-spacing: .08em; }
+h1 { margin: 1px 0 0; font-size: 21px; }
+h2 { margin: 0; }
+
+.primary, .secondary {
+  min-height: 48px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 14px;
+  font-weight: 900;
+}
+.primary { background: var(--accent); color: #fff; }
+.secondary { border: 1px solid var(--line); background: #fff; color: var(--ink); }
+.compact { min-width: 50px; min-height: 50px; }
+.iconBtn { width: 42px; height: 42px; border: 1px solid var(--line); border-radius: 50%; background: #fff; color: var(--ink); font-size: 19px; }
+.linkBtn { margin-left: auto; border: 0; background: none; color: var(--muted); font-size: 12px; }
+
+.login { min-height: 100vh; display: grid; place-items: center; padding: 18px; }
+.loginBox { width: min(390px, 100%); padding: 22px; border: 1px solid var(--line); border-radius: 22px; background: #fff; box-shadow: var(--shadow); }
+.brandMark { width: 44px; height: 44px; display: grid; place-items: center; border-radius: 13px; background: #111827; color: #fff; font-weight: 950; }
+.loginBox h1 { margin-top: 13px; }
+.loginBox p { margin: 3px 0 12px; color: var(--muted); font-size: 13px; line-height: 1.55; }
+.loginBox label { display: block; margin-top: 12px; font-size: 12px; font-weight: 850; }
+.loginBox input { width: 100%; height: 48px; margin-top: 5px; padding: 0 12px; border: 1px solid #d0d5dd; border-radius: 13px; }
+.loginBox button { width: 100%; margin-top: 14px; }
+.errorText { min-height: 18px; margin-top: 9px; color: var(--danger); font-size: 12px; line-height: 1.5; }
+
+.app { max-width: 760px; min-height: 100vh; margin: auto; padding-bottom: 92px; }
+.topbar { position: sticky; top: 0; z-index: 20; padding: 14px 14px 10px; border-bottom: 1px solid rgba(228, 231, 236, .9); background: rgba(244, 246, 248, .96); backdrop-filter: blur(14px); }
+.brandRow { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.sessionLine { display: flex; align-items: center; gap: 6px; margin-top: 8px; color: var(--muted); font-size: 12px; }
+.syncDot { width: 8px; height: 8px; flex: 0 0 auto; border-radius: 50%; background: #98a2b3; }
+.syncDot.online { background: var(--ok); }
+.homePanel { padding: 14px; }
+.homeCard { margin-top: 18px; padding: 34px 20px; border: 1px solid var(--line); border-radius: 20px; background: #fff; text-align: center; }
+.homeCard h2 { margin-top: 12px; font-size: 18px; }
+.homeCard p { margin-bottom: 0; color: var(--muted); font-size: 13px; }
+.newOrderBtn { position: fixed; z-index: 25; right: max(14px, calc((100vw - 760px) / 2 + 14px)); bottom: max(14px, env(safe-area-inset-bottom)); left: max(14px, calc((100vw - 760px) / 2 + 14px)); height: 58px; border: 0; border-radius: 18px; background: #111827; color: #fff; box-shadow: 0 12px 30px rgba(17, 24, 39, .24); font-size: 16px; font-weight: 950; }
+
+.sheet { position: fixed; inset: 0; z-index: 50; display: flex; align-items: flex-end; justify-content: center; background: rgba(16, 24, 40, .5); }
+.sheetPanel { width: min(760px, 100%); max-height: 96vh; overflow: auto; scrollbar-gutter: stable; border-radius: 24px 24px 0 0; background: var(--bg); padding-bottom: calc(18px + env(safe-area-inset-bottom)); }
+.sheetHead { position: sticky; top: 0; z-index: 12; display: flex; align-items: center; justify-content: space-between; padding: 14px; border-bottom: 1px solid var(--line); background: rgba(244, 246, 248, .96); backdrop-filter: blur(12px); }
+.sheetHead small { color: var(--muted); font-size: 11px; font-weight: 850; }
+.sheetHead h2 { margin-top: 1px; font-size: 18px; }
+.sheet.productFullscreen .sheetPanel { height: 100vh; max-height: 100vh; border-radius: 0; }
+.step { padding: 14px; }
+.stepIntro { margin: 0 0 12px; color: var(--muted); font-size: 13px; line-height: 1.5; }
+.section { margin-bottom: 10px; padding: 13px; border: 1px solid var(--line); border-radius: 18px; background: #fff; }
+.sectionTitle { margin-bottom: 9px; font-weight: 950; }
+.field { margin-bottom: 11px; }
+.field:last-child { margin-bottom: 0; }
+.field label { display: block; margin: 0 0 5px; font-size: 12px; font-weight: 900; }
+.field input, .field select, .field textarea { width: 100%; min-height: 48px; padding: 11px 12px; border: 1px solid #d0d5dd; border-radius: 13px; outline: 0; background: #fff; }
+.field input[readonly] { background: #f8fafc; color: #475467; }
+.field textarea { min-height: 78px; resize: vertical; }
+.field input:focus, .field select:focus, .field textarea:focus { border-color: #667085; box-shadow: 0 0 0 3px rgba(17, 24, 39, .07); }
+.two { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.choiceGrid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.handoffChoices { grid-template-columns: 1fr; }
+.choice { min-height: 80px; padding: 13px; border: 1px solid var(--line); border-radius: 15px; background: #fff; color: var(--ink); text-align: left; }
+.choice b { display: block; margin-bottom: 3px; }
+.choice small { color: var(--muted); font-size: 11px; line-height: 1.4; }
+.choice.on { padding: 12px; border: 2px solid #111827; background: #f8fafc; }
+.seg { display: grid; grid-template-columns: repeat(2, 1fr); gap: 5px; padding: 4px; border-radius: 13px; background: #eef1f5; }
+.seg button { min-height: 42px; border: 0; border-radius: 10px; background: transparent; color: var(--muted); font-weight: 850; }
+.seg button.on { background: #fff; color: #111827; box-shadow: 0 1px 5px rgba(16, 24, 40, .06); }
+.quickDates { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; margin-bottom: 7px; }
+.quickDates button { min-height: 42px; border: 1px solid var(--line); border-radius: 11px; background: #fff; font-weight: 850; }
+.quickDates button.on { background: #111827; color: #fff; }
+.stickyActions { position: sticky; z-index: 11; bottom: 0; display: grid; grid-template-columns: 1fr 1.6fr; gap: 8px; padding: 14px; background: linear-gradient(to top, var(--bg) 78%, rgba(244, 246, 248, 0)); }
+.stickyActions.one { grid-template-columns: 1fr; }
+.errorBox { margin: 10px 14px 0; padding: 10px 12px; border-radius: 12px; background: var(--danger-soft); color: var(--danger); font-size: 12px; font-weight: 850; }
+.hintBox { padding: 10px 11px; border-radius: 12px; background: #f8fafc; color: var(--muted); font-size: 12px; line-height: 1.5; }
+.sendHint { background: var(--ok-soft); color: var(--ok); }
+.topGap { margin-top: 10px; }
+.fieldWarning { margin-top: 5px; color: var(--warn); font-size: 11px; font-weight: 800; line-height: 1.45; }
+
+.productSearch { position: sticky; top: 70px; z-index: 8; padding-bottom: 8px; background: var(--bg); }
+.productSearchRow { display: flex; gap: 7px; }
+.productSearchRow input { flex: 1; min-width: 0; height: 50px; padding: 0 12px; border: 1px solid #d0d5dd; border-radius: 14px; font-size: 16px; }
+.masterLine { margin: 6px 2px 0; color: var(--muted); font-size: 10px; line-height: 1.4; }
+.productResults { position: absolute; top: 100%; right: 0; left: 0; display: none; max-height: min(34vh, 280px); overflow: auto; padding: 8px; border: 1px solid #d0d5dd; border-radius: 16px; background: var(--bg); box-shadow: 0 16px 34px rgba(16, 24, 40, .2); overscroll-behavior: contain; }
+.productResults.open { display: grid; gap: 7px; }
+.productResults .empty { padding: 24px 12px; border-radius: 12px; background: #fff; text-align: center; color: var(--muted); }
+.productRow { display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: center; padding: 10px; border: 1px solid var(--line); border-radius: 14px; background: #fff; color: var(--ink); text-align: left; }
+.productRow b { display: block; }
+.productRow small { display: block; margin-top: 2px; color: var(--muted); }
+.productRow.exact { padding: 9px; border: 2px solid #12b76a; background: #ecfdf3; }
+.productCodeLine { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
+.matchBadge { display: inline-flex; align-items: center; min-height: 21px; padding: 2px 7px; border-radius: 99px; background: #067647; color: #fff; font-size: 10px; font-style: normal; font-weight: 950; }
+.addBtn { padding: 9px 11px; border-radius: 11px; background: #eef1f5; font-weight: 900; }
+.productRow.exact .addBtn { background: #067647; color: #fff; }
+.productCartSection { margin-top: 2px; }
+.cart { padding: 11px; border: 1px solid var(--line); border-radius: 16px; background: #fff; }
+.cartLine { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: center; padding: 9px 0; border-bottom: 1px solid var(--line); }
+.cartLine:last-child { border-bottom: 0; }
+.cartLine small { display: block; margin-top: 2px; color: var(--muted); overflow-wrap: anywhere; }
+.qty { display: flex; align-items: center; gap: 5px; }
+.qty button { width: 34px; height: 34px; padding: 0; border: 1px solid var(--line); border-radius: 9px; background: #fff; }
+.qty input { width: 48px; height: 34px; padding: 0 3px; border: 1px solid var(--line); border-radius: 9px; text-align: center; }
+.qty .remove { color: var(--danger); }
+.compactEmpty { padding: 22px 10px; color: var(--muted); text-align: center; }
+.productKeypadDock { position: relative; z-index: 10; width: min(100%, 320px); margin: 7px 0 0 auto; padding: 7px; border: 1px solid #c7d7fe; border-radius: 14px; background: rgba(238, 244, 255, .98); }
+.keypadTitle { display: flex; align-items: center; justify-content: space-between; gap: 7px; margin-bottom: 6px; }
+.keypadTitle b { font-size: 11px; }
+.keypadModeLabel { min-height: 28px; padding: 3px 8px; border: 0; border-radius: 99px; background: #fff; color: #1849a9; font-size: 9px; font-weight: 900; }
+.productKeypad { display: grid; gap: 3px; }
+.productKeypad.numberKeys { grid-template-columns: repeat(3, 1fr); }
+.productKeypad.alphaKeys { grid-template-columns: repeat(7, 1fr); }
+.keypadUtility { display: grid; grid-column: 1 / -1; grid-template-columns: 1fr 1fr 1.2fr; gap: 3px; }
+.keypadKey { min-width: 0; min-height: 38px; padding: 0 2px; border: 1px solid #b2c5f2; border-radius: 8px; background: #fff; color: #101828; font-size: 13px; font-weight: 950; box-shadow: 0 1px 2px rgba(16, 24, 40, .05); user-select: none; }
+.alphaKeys .keypadKey { min-height: 34px; font-size: 11px; }
+.keypadKey:active { transform: translateY(1px); background: #dbe8ff; }
+.keypadKey.addKey { background: #1849a9; color: #fff; }
+.summaryRow { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; padding: 7px 0; border-bottom: 1px solid var(--line); font-size: 13px; }
+.summaryRow:last-child { border-bottom: 0; }
+.summaryRow span { color: var(--muted); }
+.summaryRow b { max-width: 45%; text-align: right; overflow-wrap: anywhere; }
+.summaryRow.total { font-size: 15px; }
+
+.successMark { width: 60px; height: 60px; display: grid; place-items: center; margin: 0 auto; border-radius: 50%; background: var(--ok-soft); color: var(--ok); font-size: 30px; }
+.toast { position: fixed; z-index: 100; bottom: 88px; left: 50%; min-width: min(420px, calc(100% - 28px)); padding: 11px 14px; border-radius: 13px; background: #111827; color: #fff; text-align: center; font-size: 12px; font-weight: 850; opacity: 0; pointer-events: none; transform: translate(-50%, 18px); transition: opacity .18s, transform .18s; }
+.toast.show { opacity: 1; transform: translate(-50%, 0); }
+
+.settingsDialog { width: min(440px, calc(100% - 28px)); padding: 0; border: 0; border-radius: 20px; color: var(--ink); box-shadow: 0 30px 90px rgba(20, 36, 58, .32); }
+.settingsDialog::backdrop { background: rgba(15, 25, 38, .58); backdrop-filter: blur(3px); }
+.settingsDialog form { display: grid; gap: 16px; padding: 22px; }
+.settingsDialog p { margin: -4px 0 0; color: var(--muted); font-size: 12px; line-height: 1.55; }
+.dialogHead { display: flex; align-items: flex-start; justify-content: space-between; }
+
+.receiptPage { max-width: 980px; min-height: 100vh; margin: auto; padding: 18px 14px 42px; }
+.receiptToolbar { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; width: min(900px, 100%); margin: 0 auto 12px; }
+.receiptToolbar h2 { margin-top: 2px; font-size: 19px; }
+.receiptToolbar > span { color: var(--muted); font-size: 11px; }
+.receiptActions { display: grid; grid-template-columns: 1fr 1.5fr; gap: 9px; width: min(520px, 100%); margin: 14px auto 0; }
+.printedActions { width: min(520px, 100%); margin: 14px auto 0; text-align: center; }
+.printedActions p { color: var(--muted); font-size: 12px; }
+.printedActions button { width: 100%; }
+.receiptSheet { width: min(900px, 100%); min-height: 900px; margin: auto; padding: 30px; border: 1px solid #dfe3e8; border-radius: 18px; background: #fff; box-shadow: var(--shadow); }
+.receiptHeaderSimple { display: grid; grid-template-columns: minmax(0, 1fr) 250px; gap: 18px; align-items: start; padding-bottom: 14px; border-bottom: 3px solid #111827; }
+.receiptBrandBlock { display: grid; gap: 7px; }
+.receiptBrandLogo { width: 225px; max-height: 68px; object-fit: contain; object-position: left center; }
+.receiptBrandName { font-size: 10px; font-weight: 900; }
+.receiptBrandSub { color: #667085; font-size: 9px; line-height: 1.45; }
+.receiptDocMeta { text-align: right; }
+.receiptDocTitle { font-size: 22px; font-weight: 950; letter-spacing: .02em; }
+.receiptDocSub { color: #667085; font-size: 9px; }
+.receiptTypeBadge { display: inline-block; margin-top: 8px; padding: 4px 10px; border-radius: 99px; background: #111827; color: #fff; font-size: 9px; font-weight: 950; }
+.receiptTypeBadge.spot { background: #b42318; }
+.receiptMetaLine { margin-top: 8px; color: #475467; font-size: 9px; line-height: 1.55; }
+.receiptInfoBand { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 7px; margin-top: 13px; }
+.receiptInfoCard { min-height: 50px; padding: 8px 9px; border: 1px solid #e4e7ec; border-radius: 10px; background: #fafafa; }
+.receiptInfoLabel { color: #667085; font-size: 8px; font-weight: 900; letter-spacing: .04em; }
+.receiptInfoValue { margin-top: 3px; font-size: 11px; font-weight: 850; line-height: 1.35; overflow-wrap: anywhere; }
+.receiptSection { margin-top: 14px; }
+.receiptSectionHead { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; margin-bottom: 7px; }
+.receiptSectionTitle { font-size: 14px; font-weight: 950; }
+.receiptSectionHint { color: #667085; font-size: 11px; }
+.receiptTable { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 12px; }
+.receiptTable col.code { width: 110px; }
+.receiptTable col.qty { width: 60px; }
+.receiptTable col.unit { width: 100px; }
+.receiptTable col.subtotal { width: 110px; }
+.receiptTable th, .receiptTable td { padding: 7px; border: 1px solid #d1d5db; text-align: left; vertical-align: top; }
+.receiptTable th { background: #f2f4f7; font-size: 10px; font-weight: 950; }
+.receiptTable td.num, .receiptTable th.num { text-align: right; white-space: nowrap; }
+.receiptTable tbody tr:nth-child(even) { background: #fcfcfd; }
+.receiptFooterGrid { display: grid; grid-template-columns: minmax(0, 1fr) 260px; gap: 12px; align-items: start; margin-top: 13px; }
+.receiptNote { min-height: 70px; padding: 9px 10px; border: 1px solid #e4e7ec; border-radius: 11px; background: #f9fafb; color: #344054; font-size: 10px; line-height: 1.55; white-space: normal; }
+.receiptNote b { display: block; margin-bottom: 4px; color: #101828; }
+.receiptBlankLines { height: 35px; background: repeating-linear-gradient(to bottom, transparent 0 16px, #dfe3e8 16px 17px); }
+.receiptSummaryBox { padding: 8px 10px; border: 2px solid #111827; border-radius: 12px; background: #fff; }
+.receiptSummaryRow { display: flex; justify-content: space-between; gap: 12px; padding: 4px 0; border-bottom: 1px solid #e4e7ec; font-size: 12px; }
+.receiptSummaryRow:last-child { border-bottom: 0; }
+.receiptSummaryRow.total { padding-top: 8px; font-size: 19px; font-weight: 950; }
+.receiptCurrencyNote { margin-top: 5px; color: #667085; font-size: 10px; text-align: right; }
+.receiptFooterMini { display: flex; justify-content: space-between; gap: 12px; margin-top: 11px; padding-top: 7px; border-top: 1px solid #d1d5db; color: #667085; font-size: 9px; }
+
+@media (max-width: 600px) {
+  .choiceGrid, .two { grid-template-columns: 1fr; }
+  .handoffChoices { grid-template-columns: 1fr; }
+  .sheetPanel { border-radius: 20px 20px 0 0; }
+  .sheet.productFullscreen .sheetPanel { border-radius: 0; }
+  .step, .stickyActions { padding-right: 12px; padding-left: 12px; }
+  .productSearchRow { gap: 5px; }
+  .productSearchRow .primary { padding: 0 11px; }
+  .cartLine { grid-template-columns: 1fr; }
+  .qty { justify-content: flex-end; }
+  .productKeypadDock { width: min(100%, 310px); }
+  .productKeypad.alphaKeys { grid-template-columns: repeat(7, 1fr); }
+  .receiptPage { padding: 8px 8px 40px; }
+  .receiptToolbar { padding: 0 7px; }
+  .receiptToolbar > span { display: none; }
+  .receiptSheet { min-height: 0; padding: 13px; border-radius: 13px; }
+  .receiptHeaderSimple, .receiptFooterGrid { grid-template-columns: 1fr; }
+  .receiptDocMeta { text-align: left; }
+  .receiptBrandLogo { width: min(100%, 210px); }
+  .receiptInfoBand { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .receiptTable, .receiptTable tbody { display: block; }
+  .receiptTable colgroup, .receiptTable thead { display: none; }
+  .receiptTable tbody { display: grid; gap: 8px; }
+  .receiptTable tr { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 12px; padding: 9px; border: 1px solid #d1d5db; border-radius: 11px; background: #fff; }
+  .receiptTable td { display: block; padding: 0; border: 0; text-align: left !important; white-space: normal !important; }
+  .receiptTable td:nth-child(1) { grid-column: 1; }
+  .receiptTable td:nth-child(2) { grid-column: 1 / -1; font-weight: 750; }
+  .receiptTable td:nth-child(3) { grid-column: 1; color: #667085; }
+  .receiptTable.spot td:nth-child(4) { grid-column: 2; grid-row: 3; color: #667085; }
+  .receiptTable.spot td:nth-child(5) { grid-column: 2; grid-row: 1; font-size: 14px; }
+  .receiptTable.normal td:nth-child(3) { grid-column: 2; grid-row: 1; color: #111827; font-size: 14px; }
+  .receiptTable td:nth-child(3)::before { content: "数量 "; color: #667085; font-size: 10px; }
+  .receiptTable.spot td:nth-child(4)::before { content: "単価 "; font-size: 10px; }
+  .receiptFooterMini { display: block; line-height: 1.6; }
+}
+
+@media (max-width: 380px) {
+  .productSearchRow input { font-size: 14px; }
+  .productSearchRow .primary { padding: 0 8px; }
+  .productKeypadDock { width: 100%; }
+  .qty { gap: 4px; }
+  .qty button { width: 32px; }
+}
+
+@page { size: A4 portrait; margin: 8mm; }
+
+@media print {
+  html, body { width: 100% !important; min-height: 0 !important; margin: 0 !important; padding: 0 !important; overflow: visible !important; background: #fff !important; }
+  body > *:not(#receiptView) { display: none !important; }
+  #receiptView { display: block !important; width: 100% !important; min-height: 0 !important; margin: 0 !important; padding: 0 !important; }
+  .receiptToolbar, .receiptActions, .printedActions { display: none !important; }
+  .receiptSheet { width: 100% !important; max-width: none !important; min-height: 0 !important; margin: 0 !important; padding: 0 !important; border: 0 !important; border-radius: 0 !important; box-shadow: none !important; }
+  .receiptHeaderSimple { grid-template-columns: minmax(0, 1fr) 230px !important; gap: 9px !important; padding-bottom: 7px !important; }
+  .receiptBrandLogo { width: 145px !important; }
+  .receiptBrandName { font-size: 9px !important; }
+  .receiptBrandSub, .receiptDocSub, .receiptMetaLine { font-size: 7.5px !important; line-height: 1.35 !important; }
+  .receiptDocTitle { font-size: 16px !important; }
+  .receiptTypeBadge { margin-top: 4px !important; padding: 2px 7px !important; font-size: 7px !important; }
+  .receiptInfoBand { grid-template-columns: repeat(4, minmax(0, 1fr)) !important; gap: 4px !important; margin-top: 7px !important; }
+  .receiptInfoCard { min-height: 0 !important; padding: 4px 5px !important; }
+  .receiptInfoLabel { font-size: 6.5px !important; }
+  .receiptInfoValue { margin-top: 1px !important; font-size: 8.5px !important; line-height: 1.25 !important; }
+  .receiptSection { margin-top: 7px !important; }
+  .receiptSectionHead { margin-bottom: 4px !important; }
+  .receiptSectionTitle { font-size: 10px !important; }
+  .receiptSectionHint { font-size: 7px !important; }
+  .receiptTable { display: table !important; font-size: 8.5px !important; }
+  .receiptTable colgroup { display: table-column-group !important; }
+  .receiptTable thead { display: table-header-group !important; }
+  .receiptTable tbody { display: table-row-group !important; }
+  .receiptTable tr { display: table-row !important; background: transparent !important; }
+  .receiptTable th, .receiptTable td { display: table-cell !important; padding: 3.5px !important; border: 1px solid #d1d5db !important; line-height: 1.2 !important; text-align: left !important; }
+  .receiptTable td.num, .receiptTable th.num { text-align: right !important; white-space: nowrap !important; }
+  .receiptTable td::before { display: none !important; content: none !important; }
+  .receiptTable col.code { width: 80px !important; }
+  .receiptTable col.qty { width: 42px !important; }
+  .receiptTable col.unit { width: 74px !important; }
+  .receiptTable col.subtotal { width: 82px !important; }
+  .receiptFooterGrid { grid-template-columns: minmax(0, 1fr) 185px !important; gap: 7px !important; margin-top: 7px !important; }
+  .receiptNote { min-height: 48px !important; padding: 5px !important; font-size: 7.5px !important; line-height: 1.35 !important; }
+  .receiptSummaryBox { padding: 5px 7px !important; }
+  .receiptSummaryRow { padding: 2.5px 0 !important; font-size: 8px !important; }
+  .receiptSummaryRow.total { padding-top: 4px !important; font-size: 13px !important; }
+  .receiptCurrencyNote { margin-top: 3px !important; font-size: 6.5px !important; }
+  .receiptFooterMini { display: flex !important; margin-top: 6px !important; padding-top: 4px !important; font-size: 6.5px !important; }
+  .receiptHeaderSimple, .receiptInfoCard, .receiptNote, .receiptSummaryBox, .receiptTable tr { break-inside: avoid !important; page-break-inside: avoid !important; }
+}
