@@ -1,4 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
+import { clearOrderData } from "./order-privacy.js";
 import {
   ORDER_TYPE,
   HANDOFF,
@@ -106,6 +107,7 @@ function clearError() {
 }
 
 function showLogin(message = "") {
+  clearCurrentOrder();
   state.authUserId = "";
   state.session = null;
   state.profile = null;
@@ -118,6 +120,7 @@ function showLogin(message = "") {
   $("loginView").classList.remove("hidden");
   $("loginMessage").textContent = message;
   $("loginButton").disabled = !supabase;
+  $("loginPassword").value = "";
 }
 
 function prepareProduct(product) {
@@ -254,9 +257,16 @@ function freshDraft() {
   };
 }
 
+function clearCurrentOrder() {
+  clearOrderData(state, [$("sheetBody"), $("receiptCard"), $("sheetError")]);
+}
+
 function startNewOrder() {
+  clearCurrentOrder();
   state.draft = freshDraft();
   state.createdAt = null;
+  $("receiptCard").classList.remove("hidden");
+  $("printPrivacyNotice").classList.remove("hidden");
   $("printedActions").classList.add("hidden");
   $("receiptActions").classList.remove("hidden");
   $("receiptView").classList.add("hidden");
@@ -683,6 +693,9 @@ function bindStaticEvents() {
   $("printButton").addEventListener("click", () => window.print());
   window.addEventListener("afterprint", () => {
     if (!$("receiptView").classList.contains("hidden")) {
+      clearCurrentOrder();
+      $("receiptCard").classList.add("hidden");
+      $("printPrivacyNotice").classList.add("hidden");
       $("receiptActions").classList.add("hidden");
       $("printedActions").classList.remove("hidden");
     }

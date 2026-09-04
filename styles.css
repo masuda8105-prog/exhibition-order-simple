@@ -158,6 +158,7 @@ h2 { margin: 0; }
 .receiptActions { display: grid; grid-template-columns: 1fr 1.5fr; gap: 9px; width: min(520px, 100%); margin: 14px auto 0; }
 .printedActions { width: min(520px, 100%); margin: 14px auto 0; text-align: center; }
 .printedActions p { color: var(--muted); font-size: 12px; }
+.printPrivacyNotice { width: min(520px, 100%); margin: 14px auto 0; color: var(--muted); font-size: 12px; line-height: 1.6; }
 .printedActions button { width: 100%; }
 .receiptSheet { width: min(900px, 100%); min-height: 900px; margin: auto; padding: 30px; border: 1px solid #dfe3e8; border-radius: 18px; background: #fff; box-shadow: var(--shadow); }
 .receiptHeaderSimple { display: grid; grid-template-columns: minmax(0, 1fr) 250px; gap: 18px; align-items: start; padding-bottom: 14px; border-bottom: 3px solid #111827; }
@@ -249,7 +250,7 @@ h2 { margin: 0; }
   html, body { width: 100% !important; min-height: 0 !important; margin: 0 !important; padding: 0 !important; overflow: visible !important; background: #fff !important; }
   body > *:not(#receiptView) { display: none !important; }
   #receiptView { display: block !important; width: 100% !important; min-height: 0 !important; margin: 0 !important; padding: 0 !important; }
-  .receiptToolbar, .receiptActions, .printedActions { display: none !important; }
+  .receiptToolbar, .receiptActions, .printedActions, .printPrivacyNotice { display: none !important; }
   .receiptSheet { width: 100% !important; max-width: none !important; min-height: 0 !important; margin: 0 !important; padding: 0 !important; border: 0 !important; border-radius: 0 !important; box-shadow: none !important; }
   .receiptHeaderSimple { grid-template-columns: minmax(0, 1fr) 230px !important; gap: 9px !important; padding-bottom: 7px !important; }
   .receiptBrandLogo { width: 145px !important; }
