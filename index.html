@@ -14,7 +14,7 @@
     <form id="loginForm" class="loginBox">
       <div class="brandMark" aria-hidden="true">SN</div>
       <h1>展示会 注文書作成</h1>
-      <p>登録スタッフでログインしてください。商品マスタはログイン後にだけ読み込みます。</p>
+      <p>登録スタッフでログインしてください。一度ログインすると、この端末ではログイン状態を保持します。</p>
       <label for="loginEmail">メール</label>
       <input id="loginEmail" type="email" autocomplete="username" required>
       <label for="loginPassword">パスワード</label>
@@ -26,25 +26,18 @@
 
   <div id="appView" class="app hidden">
     <header class="topbar">
-      <div class="brandRow">
-        <div>
-          <div id="eventName" class="eyebrow">EXHIBITION</div>
-          <h1>注文書作成</h1>
-        </div>
-        <button id="settingsButton" class="iconBtn" type="button" aria-label="端末設定">⚙</button>
-      </div>
+      <div class="brandRow"><div><div class="eyebrow">SAN NISHIMURA</div><h1>展示会注文</h1></div></div>
       <div class="sessionLine">
-        <span class="syncDot online" aria-hidden="true"></span>
+        <span id="syncDot" class="syncDot busy" aria-hidden="true"></span>
+        <span id="syncStatus">同期を確認中…</span>
         <span id="staffName">スタッフ確認中</span>
         <button id="logoutButton" class="linkBtn" type="button">ログアウト</button>
       </div>
     </header>
     <main class="homePanel">
-      <div class="homeCard">
-        <div class="successMark">✓</div>
-        <h2>注文書をすぐ作成できます</h2>
-        <p>注文内容・顧客情報はこの端末へ保存しません。</p>
-      </div>
+      <div class="historySummary"><div><small>保存済み注文</small><b id="orderCount">0件</b></div><button id="refreshOrders" class="secondary compact" type="button">同期</button></div>
+      <div class="orderSearchWrap"><label class="srOnly" for="orderSearch">注文を検索</label><input id="orderSearch" type="search" placeholder="店舗名・お客様名・品番で検索" autocomplete="off"></div>
+      <section id="orderHistory" class="orderHistory" aria-label="注文履歴"></section>
     </main>
     <button id="newOrderButton" class="newOrderBtn" type="button">＋ 新しい注文</button>
   </div>
@@ -58,13 +51,14 @@
       <span>A4縦・ブラウザ印刷</span>
     </div>
     <article id="receiptCard" class="receiptSheet" aria-label="展示会注文書"></article>
-    <p id="printPrivacyNotice" class="printPrivacyNotice">印刷・PDF保存を済ませてから印刷画面を閉じてください。閉じると注文・お客様情報を消去します（キャンセル時も同様です）。</p>
+    <p id="printPrivacyNotice" class="printPrivacyNotice">この注文は共有注文履歴へ保存済みです。印刷画面を閉じても入力内容は消えません。</p>
     <div id="receiptActions" class="receiptActions">
       <button id="backToEditButton" class="secondary" type="button">戻って修正</button>
       <button id="printButton" class="primary" type="button">印刷</button>
     </div>
-    <div id="printedActions" class="printedActions hidden">
-      <p>印刷画面を閉じました。注文・お客様情報は消去しました。</p>
+    <div id="printedActions" class="printedActions">
+      <p>注文内容は保存されています。</p>
+      <button id="backToHistoryButton" class="secondary" type="button">注文一覧へ</button>
       <button id="startNextOrderButton" class="primary" type="button">新しい注文を始める</button>
     </div>
   </section>
@@ -82,24 +76,6 @@
       <div id="sheetBody"></div>
     </div>
   </div>
-
-  <dialog id="settingsDialog" class="settingsDialog">
-    <form id="settingsForm" method="dialog">
-      <div class="dialogHead">
-        <div>
-          <div class="eyebrow">SETTINGS</div>
-          <h2>端末設定</h2>
-        </div>
-        <button id="settingsCloseButton" class="iconBtn" type="button" aria-label="閉じる">×</button>
-      </div>
-      <p>展示会名だけをこの端末に保存します。受注担当者はログイン中のスタッフです。</p>
-      <div class="field">
-        <label for="eventNameInput">展示会名</label>
-        <input id="eventNameInput" placeholder="例：JEX 2026">
-      </div>
-      <button class="primary" type="submit">保存</button>
-    </form>
-  </dialog>
 
   <script type="module" src="./app.js"></script>
 </body>

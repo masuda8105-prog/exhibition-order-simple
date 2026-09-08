@@ -1,13 +1,19 @@
 import { createClient } from "@supabase/supabase-js";
 import { clearOrderData } from "./order-privacy.js";
 import {
+  SYNC_EVENT_NAME,
+  RECEIPT_EVENT_NAME,
+  orderFromRow,
+  orderLabel,
+  orderMatches,
+  orderNumber,
+  payloadForOrder,
+} from "./order-sync.js";
+import {
   ORDER_TYPE,
   HANDOFF,
   PAYMENT,
   compactKey,
-  handoffLabel,
-  orderTypeLabel,
-  paymentLabel,
   phoneHasUnexpectedCharacters,
   syntaxKey,
   totalPrice,
@@ -15,7 +21,6 @@ import {
   validateDraft,
 } from "./order-domain.js";
 
-const SETTINGS_KEY = "exhibitionSimple.settings.v2";
 const $ = (id) => document.getElementById(id);
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL?.trim();
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY?.trim();
@@ -27,7 +32,8 @@ const supabase = supabaseUrl && supabaseAnonKey
       persistSession: true,
       autoRefreshToken: true,
       detectSessionInUrl: false,
-      storage: window.sessionStorage,
+      storageKey: "exhibitionSimple.auth.v1",
+      storage: window.localStorage,
     },
   })
   : null;
@@ -37,23 +43,16 @@ const state = {
   profile: null,
   products: [],
   accounts: [],
+  orders: [],
   draft: null,
   createdAt: null,
-  settings: loadSettings(),
   authUserId: "",
+  syncTimer: null,
+  orderChannel: null,
+  saving: false,
+  syncInFlight: null,
+  dataEpoch: 0,
 };
-
-function loadSettings() {
-  try {
-    return { eventName: "", ...JSON.parse(localStorage.getItem(SETTINGS_KEY) || "{}") };
-  } catch {
-    return { eventName: "" };
-  }
-}
-
-function saveSettings() {
-  localStorage.setItem(SETTINGS_KEY, JSON.stringify({ eventName: state.settings.eventName || "" }));
-}
 
 function escapeHtml(value) {
   return String(value ?? "").replace(/[&<>"']/g, (character) => ({
@@ -73,12 +72,6 @@ function dateOffset(days) {
   const date = new Date();
   date.setDate(date.getDate() + days);
   return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Tokyo" }).format(date);
-}
-
-function formatDate(date) {
-  return new Intl.DateTimeFormat("ja-JP", {
-    timeZone: "Asia/Tokyo", year: "numeric", month: "long", day: "numeric",
-  }).format(date);
 }
 
 function formatTime(date) {
@@ -111,12 +104,21 @@ function clearError() {
 }
 
 function showLogin(message = "") {
+  state.dataEpoch++;
   clearCurrentOrder();
+  clearInterval(state.syncTimer);
+  if (state.orderChannel && supabase) supabase.removeChannel(state.orderChannel);
+  state.syncTimer = null;
+  state.orderChannel = null;
   state.authUserId = "";
   state.session = null;
   state.profile = null;
   state.products = [];
   state.accounts = [];
+  state.orders = [];
+  $("orderHistory").replaceChildren();
+  $("orderSearch").value = "";
+  document.body.style.overflow = "";
   state.draft = null;
   $("appView").classList.add("hidden");
   $("receiptView").classList.add("hidden");
@@ -167,6 +169,175 @@ async function fetchAccountOptions() {
   return (data || []).map((row) => String(row.account_name)).filter(Boolean);
 }
 
+function newUuid() {
+  return crypto.randomUUID();
+}
+
+function permanentReceipt(id) {
+  const day = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Tokyo" })
+    .format(new Date()).replaceAll("-", "");
+  return `受付-${day}-${id.slice(0, 8).toUpperCase()}`;
+}
+
+async function fetchOrders() {
+  const epoch = state.dataEpoch;
+  const rows = [];
+  const pageSize = 500;
+  for (let from = 0; ; from += pageSize) {
+    const { data, error } = await supabase
+      .from("exhibition_app_orders")
+      .select("id,payload,created_at,updated_at")
+      .eq("event_name", SYNC_EVENT_NAME)
+      .is("deleted_at", null)
+      .order("created_at", { ascending: false })
+      .order("id", { ascending: false })
+      .range(from, from + pageSize - 1);
+    if (error) throw error;
+    rows.push(...(data || []));
+    if (!data || data.length < pageSize) break;
+  }
+  if (epoch !== state.dataEpoch || !state.session) return;
+  state.orders = rows.map(orderFromRow);
+  renderHistory();
+  setSyncStatus("online", `保存済み・同期完了 ${formatTime(new Date())}`);
+}
+
+function setSyncStatus(mode, message) {
+  const dot = $("syncDot");
+  if (dot) dot.className = `syncDot ${mode}`;
+  if ($("syncStatus")) $("syncStatus").textContent = message;
+}
+
+async function syncOrders({ quiet = false } = {}) {
+  if (!supabase || !state.session || isLocalDemo) return;
+  if (state.syncInFlight) return state.syncInFlight;
+  if (!quiet) setSyncStatus("busy", "注文を同期しています…");
+  state.syncInFlight = fetchOrders().catch((error) => {
+    console.error(error);
+    setSyncStatus("error", "同期できません。通信を確認してください");
+    if (!quiet) toast("注文を同期できませんでした");
+  }).finally(() => { state.syncInFlight = null; });
+  return state.syncInFlight;
+}
+
+function beginOrderSync() {
+  clearInterval(state.syncTimer);
+  state.syncTimer = setInterval(() => {
+    if (document.visibilityState === "visible") syncOrders({ quiet: true });
+  }, 10000);
+  if (state.orderChannel) supabase.removeChannel(state.orderChannel);
+  state.orderChannel = supabase
+    .channel(`simple-orders-${state.authUserId}`)
+    .on("postgres_changes", {
+      event: "*", schema: "public", table: "exhibition_app_orders",
+      filter: `event_name=eq.${SYNC_EVENT_NAME}`,
+    }, () => syncOrders({ quiet: true }))
+    .subscribe();
+}
+
+async function saveDraftToCloud() {
+  if (state.saving) return null;
+  state.saving = true;
+  setSyncStatus("busy", state.draft.editingId ? "変更を保存しています…" : "注文を保存しています…");
+  try {
+    const draft = state.draft;
+    if (!draft.localId) draft.localId = newUuid();
+    if (draft.handoff === HANDOFF.LATER && !draft.receiptNo) draft.receiptNo = permanentReceipt(draft.localId);
+    const payload = payloadForOrder(draft);
+    let result;
+    if (draft.editingId) {
+      const { data, error } = await supabase
+        .from("exhibition_app_orders")
+        .update({ payload })
+        .eq("id", draft.editingId)
+        .eq("event_name", SYNC_EVENT_NAME)
+        .eq("updated_at", draft.cloudUpdatedAt)
+        .is("deleted_at", null)
+        .select("id,payload,created_at,updated_at")
+        .maybeSingle();
+      if (error) throw error;
+      if (!data) {
+        await syncOrders({ quiet: true });
+        throw new Error("SYNC_CONFLICT");
+      }
+      result = orderFromRow(data);
+    } else {
+      const { data, error } = await supabase
+        .from("exhibition_app_orders")
+        .insert({ id: draft.localId, event_name: SYNC_EVENT_NAME, payload })
+        .select("id,payload,created_at,updated_at")
+        .single();
+      if (error && error.code !== "23505") throw error;
+      if (error) {
+        const existing = await supabase.from("exhibition_app_orders")
+          .select("id,payload,created_at,updated_at")
+          .eq("id", draft.localId).eq("event_name", SYNC_EVENT_NAME)
+          .is("deleted_at", null).single();
+        if (existing.error) throw existing.error;
+        const savedPayload = payloadForOrder(orderFromRow(existing.data));
+        if (JSON.stringify(savedPayload) !== JSON.stringify(payload)) throw new Error("SYNC_CONFLICT");
+        result = orderFromRow(existing.data);
+      } else result = orderFromRow(data);
+    }
+    state.dataEpoch++;
+    state.orders = [result, ...state.orders.filter((order) => order.localId !== result.localId)];
+    state.draft = { ...result, editingId: result.localId, stage: "info" };
+    state.createdAt = new Date(result.createdAt);
+    renderHistory();
+    setSyncStatus("online", `保存済み・同期完了 ${formatTime(new Date())}`);
+    return state.draft;
+  } finally {
+    state.saving = false;
+  }
+}
+
+function renderHistory() {
+  const container = $("orderHistory");
+  if (!container) return;
+  const query = $("orderSearch")?.value || "";
+  const list = state.orders.filter((order) => orderMatches(order, query));
+  $("orderCount").textContent = `${state.orders.length}件`;
+  container.innerHTML = list.length ? list.map((order) => `
+    <article class="orderCard">
+      <div class="orderCardTop">
+        <div><small>${escapeHtml(orderNumber(order))}</small><h3>${escapeHtml(order.store || "店舗名なし")}</h3></div>
+        <b>${yen(totalPrice(order.items))}</b>
+      </div>
+      <div class="orderCardMeta">${escapeHtml(orderLabel(order))}・${totalQuantity(order.items)}点${order.customer ? `・${escapeHtml(order.customer)}` : ""}</div>
+      <div class="orderCardBottom"><span>${escapeHtml(formatDateTime(order.updatedAt || order.createdAt))}</span><button type="button" class="secondary compact" data-open-order="${escapeHtml(order.localId)}">変更・印刷</button></div>
+    </article>`).join("") : '<div class="historyEmpty">保存済み注文はありません。</div>';
+  container.querySelectorAll("[data-open-order]").forEach((button) => button.addEventListener("click", () => {
+    const order = state.orders.find((item) => item.localId === button.dataset.openOrder);
+    if (order) openSavedOrder(order);
+  }));
+}
+
+function formatDateTime(value) {
+  const date = new Date(value || Date.now());
+  return Number.isNaN(date.getTime()) ? "" : new Intl.DateTimeFormat("ja-JP", {
+    timeZone: "Asia/Tokyo", month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit",
+  }).format(date);
+}
+
+function openSavedOrder(order) {
+  state.draft = {
+    ...order,
+    items: (order.items || []).map((item) => ({ ...item })),
+    editingId: order.localId,
+    stage: "info",
+    productQuery: "",
+    keypadMode: "number",
+  };
+  state.createdAt = new Date(order.createdAt || Date.now());
+  renderReceipt();
+  closeSheet();
+  $("appView").classList.add("hidden");
+  $("receiptView").classList.remove("hidden");
+  $("receiptActions").classList.remove("hidden");
+  $("printedActions").classList.remove("hidden");
+  window.scrollTo({ top: 0 });
+}
+
 async function openForSession(session) {
   if (!session?.user?.id || state.authUserId === session.user.id) return;
   state.authUserId = session.user.id;
@@ -185,7 +356,9 @@ async function openForSession(session) {
     state.profile = profile;
     state.products = products;
     state.accounts = accounts;
+    await fetchOrders();
     showApp();
+    beginOrderSync();
   } catch (error) {
     console.error(error);
     state.authUserId = "";
@@ -198,9 +371,8 @@ function showApp() {
   $("loginView").classList.add("hidden");
   $("receiptView").classList.add("hidden");
   $("appView").classList.remove("hidden");
-  $("eventName").textContent = state.settings.eventName || "EXHIBITION";
-  $("staffName").textContent = `${state.profile.display_name} ／ 商品マスタ ${state.products.length.toLocaleString("ja-JP")}件`;
-  startNewOrder();
+  $("staffName").textContent = `${state.profile.display_name} ／ 商品 ${state.products.length.toLocaleString("ja-JP")}件`;
+  renderHistory();
 }
 
 async function boot() {
@@ -213,6 +385,7 @@ async function boot() {
       prepareProduct({ product_no: "141-TEST", product_name: "ハイフン検索確認商品", wholesale_price: 0 }),
     ];
     state.accounts = ["テスト帳合先"];
+    state.orders = [orderFromRow({ id: "11111111-1111-4111-8111-111111111111", created_at: new Date().toISOString(), updated_at: new Date().toISOString(), payload: { receiptNo: "受付-20260908-DEMO0001", type: ORDER_TYPE.SPOT, handoff: HANDOFF.LATER, store: "サンプル眼鏡店", phone: "06-0000-0000", customer: "西村様", staff: "テスト担当", paymentMethod: PAYMENT.CREDIT, paid: false, pickupDate: dateOffset(1), notes: "動作確認用（保存されません）", items: [{ code: "D001", name: "動作確認商品 A", price: 5200, qty: 1 }] } })];
     showApp();
     return;
   }
@@ -258,6 +431,10 @@ function freshDraft() {
     checkoutDate: "",
     shipAddress: "",
     notes: "",
+    editingId: "",
+    cloudUpdatedAt: "",
+    localId: "",
+    receiptNo: "",
   };
 }
 
@@ -266,6 +443,7 @@ function clearCurrentOrder() {
 }
 
 function startNewOrder() {
+  if (state.saving) return;
   clearCurrentOrder();
   state.draft = freshDraft();
   state.createdAt = null;
@@ -279,6 +457,16 @@ function startNewOrder() {
   renderDraft();
 }
 
+function showHistory() {
+  closeSheet();
+  state.draft = null;
+  state.createdAt = null;
+  $("receiptView").classList.add("hidden");
+  $("appView").classList.remove("hidden");
+  renderHistory();
+  window.scrollTo({ top: 0 });
+}
+
 function openSheet() {
   $("sheet").classList.remove("hidden");
   document.body.style.overflow = "hidden";
@@ -286,6 +474,7 @@ function openSheet() {
 }
 
 function closeSheet() {
+  if (state.saving) return;
   $("sheet").classList.add("hidden");
   $("sheet").classList.remove("productFullscreen");
   document.body.style.overflow = "";
@@ -558,7 +747,7 @@ function renderInfoStep() {
         <div class="field"><label for="fNotes">備考（任意）</label><textarea id="fNotes" placeholder="納期・連絡事項など">${escapeHtml(draft.notes)}</textarea></div>
       </div>
       <div class="section"><div class="sectionTitle">注文確認</div>${itemSummary}<div class="summaryRow total"><span>合計</span><b>${normal ? `${totalQuantity(draft.items)}点` : yen(totalPrice(draft.items))}</b></div></div>
-      <div class="hintBox sendHint">入力内容は保存せず、このまま注文書プレビューを作成します。</div>
+      <div class="hintBox sendHint">注文を共有履歴へ保存してから、注文書プレビューを開きます。</div>
       ${draft.paymentMethod === PAYMENT.CASH ? '<div class="hintBox topGap">現金は受取金額を確認してください。</div>' : ""}
     </div>
     <div class="stickyActions"><button id="backType" class="secondary" type="button">戻る</button><button id="previewOrder" class="primary" type="button">PDF・印刷へ</button></div>`;
@@ -575,7 +764,7 @@ function rememberInfo(normal) {
     draft.accountChoice = $("fAccount").value;
     draft.accountOther = $("fAccountOther")?.value.trim() || "";
     draft.account = draft.accountChoice === "その他" ? draft.accountOther : draft.accountChoice;
-    draft.staff = state.profile.display_name;
+    draft.staff = draft.staff || state.profile.display_name;
   } else {
     draft.customerRegion = $("fRegion").value;
     draft.paymentMethod = $("fPayment").value;
@@ -599,17 +788,46 @@ function bindInfoStep(normal, now) {
   if ($("payLater")) $("payLater").addEventListener("click", () => { rememberInfo(normal); state.draft.paid = false; renderDraft(); });
   document.querySelectorAll("[data-day]").forEach((button) => button.addEventListener("click", () => { rememberInfo(normal); state.draft.pickupDate = dateOffset(Number(button.dataset.day)); renderDraft(); }));
   $("backType").addEventListener("click", () => { rememberInfo(normal); state.draft.stage = "type"; renderDraft(); });
-  $("previewOrder").addEventListener("click", () => {
+  $("previewOrder").addEventListener("click", async () => {
     rememberInfo(normal);
     if (now) state.draft.paid = true;
     const error = validateDraft(state.draft);
     if (error) return showError(error);
-    state.createdAt = new Date();
-    renderReceipt();
-    closeSheet();
-    $("appView").classList.add("hidden");
-    $("receiptView").classList.remove("hidden");
-    window.scrollTo({ top: 0 });
+    const button = $("previewOrder");
+    button.disabled = true;
+    const controls = [...document.querySelectorAll("#sheet input,#sheet select,#sheet textarea,#sheet button")];
+    controls.forEach((control) => { control.disabled = true; });
+    button.textContent = "保存中…";
+    try {
+      if (isLocalDemo) {
+        if (!state.draft.localId) state.draft.localId = newUuid();
+        if (state.draft.handoff === HANDOFF.LATER && !state.draft.receiptNo) state.draft.receiptNo = permanentReceipt(state.draft.localId);
+        const nowIso = new Date().toISOString();
+        const saved = orderFromRow({ id: state.draft.localId, payload: payloadForOrder(state.draft), created_at: state.draft.createdAt || nowIso, updated_at: nowIso });
+        state.orders = [saved, ...state.orders.filter((item) => item.localId !== saved.localId)];
+        state.draft = { ...saved, editingId: saved.localId, stage: "info" };
+        renderHistory();
+      } else {
+        await saveDraftToCloud();
+      }
+      state.createdAt = new Date(state.draft.createdAt || Date.now());
+      renderReceipt();
+      closeSheet();
+      $("appView").classList.add("hidden");
+      $("receiptView").classList.remove("hidden");
+      $("receiptCard").classList.remove("hidden");
+      $("receiptActions").classList.remove("hidden");
+      $("printedActions").classList.remove("hidden");
+      window.scrollTo({ top: 0 });
+    } catch (saveError) {
+      console.error(saveError);
+      showError(saveError.message === "SYNC_CONFLICT" ? "別の端末で先に変更されました。注文一覧から開き直してください。" : "注文を保存できませんでした。通信を確認して、もう一度お試しください。");
+      setSyncStatus("error", "保存できませんでした。入力内容は保持しています");
+      button.disabled = false;
+      button.textContent = "保存してPDF・印刷へ";
+    } finally {
+      controls.forEach((control) => { control.disabled = false; });
+    }
   });
 }
 
@@ -617,56 +835,42 @@ function receiptInfo(label, value) {
   return `<div class="receiptInfoCard"><div class="receiptInfoLabel">${escapeHtml(label)}</div><div class="receiptInfoValue">${escapeHtml(value || "-")}</div></div>`;
 }
 
-function deliveryNotes(draft) {
-  const lines = [];
-  if (draft.handoff === HANDOFF.LATER) lines.push(`受取予定日：${draft.pickupDate}`);
-  if (draft.handoff === HANDOFF.HOTEL) {
-    lines.push(`ホテル：${draft.hotelName}`);
-    lines.push(`宿泊者：${draft.guestName}${draft.roomNo ? `／部屋 ${draft.roomNo}` : ""}`);
-    if (draft.checkoutDate) lines.push(`チェックアウト予定日：${draft.checkoutDate}`);
-  }
-  if (draft.handoff === HANDOFF.SHIP) lines.push(`配送先：${draft.shipAddress}`);
-  if (draft.notes) lines.push(draft.notes);
-  return lines.join("\n");
+function receiptHandoffLabel(order) {
+  if (order.type === ORDER_TYPE.NORMAL) return "帰社後にまとめて印刷";
+  if (order.handoff === HANDOFF.NOW) return "その場で会計・お渡し";
+  if (order.handoff === HANDOFF.LATER) return order.pickupDate ? `${order.pickupDate} 受取予定` : "後日受取";
+  if (order.handoff === HANDOFF.HOTEL) return `本社対応・ホテル配送${order.hotelName ? `（${order.hotelName}）` : ""}`;
+  if (order.handoff === HANDOFF.SHIP) return "本社対応・指定先配送";
+  return "-";
 }
 
 function renderReceipt() {
   const draft = state.draft;
-  const spot = draft.type === ORDER_TYPE.SPOT;
   const date = state.createdAt || new Date();
-  const info = spot ? [
-    ["店舗名", draft.store], ["電話番号", draft.phone], ["お客様名", draft.customer],
-    ["注文区分", orderTypeLabel(draft.type)], ["商品の渡し方", handoffLabel(draft.handoff)],
-    ["会計方法", paymentLabel(draft.paymentMethod)], ["会計状況", draft.paid ? "会計済み" : "未会計"],
-    ["受注担当", draft.staff],
-  ] : [
-    ["店舗名", draft.store], ["電話番号", draft.phone], ["お客様名", draft.customer || "-"],
-    ["注文区分", orderTypeLabel(draft.type)], ["卸屋・帳合先", draft.account], ["受注担当", draft.staff],
-  ];
+  const info = [["店舗名", draft.store], ["電話番号", draft.phone], ["お客様名", draft.customer || "-"], ["注文区分", orderLabel(draft)], ["卸屋・帳合先", draft.account || "-"], ["担当", draft.staff || state.profile?.display_name || "-"], ["受け渡し", receiptHandoffLabel(draft)]];
   const rows = draft.items.map((item) => `
-    <tr><td><b>${escapeHtml(item.code)}</b></td><td>${escapeHtml(item.name)}</td><td class="num">${item.qty}</td>${spot ? `<td class="num">${yen(item.price)}</td><td class="num"><b>${yen(item.price * item.qty)}</b></td>` : ""}</tr>`).join("");
-  const notes = deliveryNotes(draft);
+    <tr><td><b>${escapeHtml(item.code)}</b></td><td>${escapeHtml(item.name)}</td><td class="num">${item.qty}</td><td class="num">${yen(item.price)}</td><td class="num"><b>${yen(item.price * item.qty)}</b></td></tr>`).join("");
+  const notesHtml = `${draft.notes ? `<div class="receiptNote"><b>備考</b>${escapeHtml(draft.notes).replace(/\n/g, "<br>")}</div>` : ""}<div class="receiptNote"><b>ご案内</b>内容を確認し、必要に応じて印刷またはPDF保存してください。</div>`;
   $("receiptCard").innerHTML = `
     <div class="receiptHeaderSimple">
       <div class="receiptBrandBlock">
         <img class="receiptBrandLogo" src="./assets/sun_nishimura_logo.jpg" alt="株式会社サンニシムラ">
-        <div><div class="receiptBrandName">株式会社サンニシムラ</div><div class="receiptBrandSub">SAN NISHIMURA CO., LTD.<br>${escapeHtml(state.settings.eventName || "展示会")}</div></div>
+        <div><div class="receiptBrandName">株式会社サンニシムラ</div><div class="receiptBrandSub">SAN NISHIMURA CO., LTD.<br>${escapeHtml(RECEIPT_EVENT_NAME)}</div></div>
       </div>
-      <div class="receiptDocMeta"><div class="receiptDocTitle">展示会 注文書</div><div class="receiptDocSub">Exhibition Order Receipt</div><div class="receiptTypeBadge ${spot ? "spot" : ""}">${escapeHtml(orderTypeLabel(draft.type))}</div><div class="receiptMetaLine"><b>作成日</b> ${escapeHtml(formatDate(date))}<br><b>受付時刻</b> ${escapeHtml(formatTime(date))}</div></div>
+      <div class="receiptDocMeta"><div class="receiptDocTitle">展示会 注文書</div><div class="receiptDocSub">Exhibition Order Receipt</div><div class="receiptMetaLine"><b>注文番号</b> ${escapeHtml(orderNumber(draft))}<br><b>作成日時</b> ${escapeHtml(new Date(date).toLocaleString("ja-JP"))}</div></div>
     </div>
     <div class="receiptInfoBand">${info.map(([label, value]) => receiptInfo(label, value)).join("")}</div>
     <div class="receiptSection"><div class="receiptSectionHead"><div class="receiptSectionTitle">注文明細</div><div class="receiptSectionHint">${totalQuantity(draft.items)}点</div></div>
-      <table class="receiptTable ${spot ? "spot" : "normal"}">
-        ${spot ? '<colgroup><col class="code"><col><col class="qty"><col class="unit"><col class="subtotal"></colgroup>' : '<colgroup><col class="code"><col><col class="qty"></colgroup>'}
-        <thead><tr><th>品番</th><th>商品名</th><th class="num">数量</th>${spot ? '<th class="num">単価</th><th class="num">金額</th>' : ""}</tr></thead>
+      <table class="receiptTable"><colgroup><col class="code"><col><col class="qty"><col class="unit"><col class="subtotal"></colgroup>
+        <thead><tr><th>品番</th><th>商品名</th><th class="num">数量</th><th class="num">単価</th><th class="num">金額</th></tr></thead>
         <tbody>${rows}</tbody>
       </table>
     </div>
     <div class="receiptFooterGrid">
-      <div class="receiptNote"><b>備考</b>${notes ? escapeHtml(notes).replace(/\n/g, "<br>") : '<div class="receiptBlankLines"></div>'}</div>
-      <div><div class="receiptSummaryBox"><div class="receiptSummaryRow"><span>点数</span><span>${totalQuantity(draft.items)}</span></div>${spot ? `<div class="receiptSummaryRow total"><span>合計</span><span>${yen(totalPrice(draft.items))}</span></div>` : ""}</div>${spot ? '<div class="receiptCurrencyNote">通貨：JPY</div>' : ""}</div>
+      <div class="receiptMemoStack">${notesHtml}</div>
+      <div><div class="receiptSummaryBox"><div class="receiptSummaryRow"><span>点数</span><span>${totalQuantity(draft.items)}</span></div><div class="receiptSummaryRow total"><span>合計</span><span>${yen(totalPrice(draft.items))}</span></div></div><div class="receiptCurrencyNote">通貨：JPY</div></div>
     </div>
-    <div class="receiptFooterMini"><span>株式会社サンニシムラ</span><span>${escapeHtml(state.settings.eventName || "展示会")}・${escapeHtml(orderTypeLabel(draft.type))}</span></div>`;
+    <div class="receiptFooterMini"><span>株式会社サンニシムラ</span><span>${escapeHtml(RECEIPT_EVENT_NAME)}・${escapeHtml(orderNumber(draft))}</span></div>`;
 }
 
 function bindStaticEvents() {
@@ -684,12 +888,16 @@ function bindStaticEvents() {
     }
   });
   $("logoutButton").addEventListener("click", async () => {
+    if (state.saving) return;
     closeSheet();
     if (isLocalDemo) return showLogin("ローカル確認モードを終了しました。");
     await supabase.auth.signOut();
   });
   $("newOrderButton").addEventListener("click", startNewOrder);
   $("startNextOrderButton").addEventListener("click", startNewOrder);
+  $("backToHistoryButton").addEventListener("click", showHistory);
+  $("refreshOrders").addEventListener("click", () => isLocalDemo ? renderHistory() : syncOrders());
+  $("orderSearch").addEventListener("input", renderHistory);
   $("closeSheetButton").addEventListener("click", closeSheet);
   $("backToEditButton").addEventListener("click", () => {
     $("receiptView").classList.add("hidden");
@@ -699,25 +907,14 @@ function bindStaticEvents() {
     renderDraft();
   });
   $("printButton").addEventListener("click", () => window.print());
+  window.addEventListener("online", () => syncOrders({ quiet: true }));
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") syncOrders({ quiet: true });
+  });
   window.addEventListener("afterprint", () => {
     if (!$("receiptView").classList.contains("hidden")) {
-      clearCurrentOrder();
-      $("receiptCard").classList.add("hidden");
-      $("printPrivacyNotice").classList.add("hidden");
-      $("receiptActions").classList.add("hidden");
       $("printedActions").classList.remove("hidden");
     }
-  });
-  $("settingsButton").addEventListener("click", () => {
-    $("eventNameInput").value = state.settings.eventName || "";
-    $("settingsDialog").showModal();
-  });
-  $("settingsCloseButton").addEventListener("click", () => $("settingsDialog").close());
-  $("settingsForm").addEventListener("submit", () => {
-    state.settings.eventName = $("eventNameInput").value.trim();
-    saveSettings();
-    $("eventName").textContent = state.settings.eventName || "EXHIBITION";
-    toast("端末設定を保存しました");
   });
 }
 

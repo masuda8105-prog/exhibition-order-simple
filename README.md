@@ -6,19 +6,16 @@
 2. 国内通常注文／現売り対応と商品の渡し方を選択
 3. お客様情報を入力してPDF・印刷へ
 
-注文履歴・顧客情報・売上は保存しません。商品マスタ、卸価格、帳合先候補はSupabaseへ置き、認証済みの有効スタッフだけが取得できます。
+注文はSupabaseの共有履歴へ保存し、別端末・別スタッフから再表示・変更・再印刷できます。商品マスタ、卸価格、帳合先候補もSupabaseへ置き、認証済みの有効スタッフだけが取得できます。
 
 ## 構成
 
 - GitHub: HTML、CSS、JavaScript、公開ロゴ、Supabaseマイグレーション、テスト、ビルド設定
-- Supabase: `products`、`exhibition_accounts`、`exhibition_staff`、Authユーザー
+- Supabase: `products`、`exhibition_accounts`、`exhibition_staff`、`exhibition_app_orders`、Authユーザー
 - ブラウザのメモリ: 商品マスタ、入力中の注文、お客様情報、印刷プレビュー
-- `sessionStorage`: Supabase Authのセッション（タブを閉じると消去）
-- `localStorage`: 展示会名だけ
+- `localStorage`: Supabase Authセッションのみ（ログイン状態の保持）
 
-注文・顧客を保存するSupabaseテーブルは作りません。
-
-印刷画面を閉じると、注文・顧客情報をメモリとプレビュー・入力フォームから消去します。ブラウザは印刷成功とキャンセルを区別して通知しないため、キャンセル時も消去されます。印刷またはPDF保存を済ませてから閉じてください。
+展示会名の入力欄はありません。共有注文テーブルの中でSIMPLE版専用の `event_name = exhibition-order-simple` を使い、既存国内ツールの注文と分離します。SIMPLE版のスタッフ間で注文を同期します。印刷画面を閉じても注文内容は消えません。
 
 ## セットアップ
 
