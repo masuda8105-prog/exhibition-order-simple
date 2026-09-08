@@ -95,6 +95,10 @@ function toast(message) {
   toast.timer = setTimeout(() => element.classList.remove("show"), 2100);
 }
 
+function focusProductInput(query) {
+  if (!window.matchMedia("(pointer: coarse)").matches) query.focus();
+}
+
 function showError(message) {
   $("sheetError").textContent = message;
   $("sheetError").classList.remove("hidden");
@@ -324,7 +328,7 @@ function addProduct(product) {
   renderProductResults("");
   renderCart();
   toast(existing ? `No.${product.code} の数量を ${existing.qty} にしました` : `No.${product.code} を追加しました`);
-  $("productQ").focus();
+  focusProductInput($("productQ"));
 }
 
 function addExactQuery() {
@@ -381,7 +385,7 @@ function renderProductStep() {
   bindProductKeypad();
   renderCart();
   renderProductResults(query.value);
-  setTimeout(() => query.focus(), 0);
+  setTimeout(() => focusProductInput(query), 0);
 }
 
 function bindProductKeypad() {
@@ -398,6 +402,7 @@ function bindProductKeypad() {
       + '<div class="keypadUtility"><button type="button" class="keypadKey" data-key="mode">数字／英字</button><button type="button" class="keypadKey" data-key="clear">クリア</button><button type="button" class="keypadKey addKey" data-key="add">追加</button></div>';
     modeButton.textContent = draft.keypadMode === "alpha" ? "英字・記号" : "数字・記号";
     wrap.querySelectorAll("[data-key]").forEach((button) => button.addEventListener("click", () => {
+      query.blur();
       const key = button.dataset.key;
       if (key === "mode") draft.keypadMode = draft.keypadMode === "alpha" ? "number" : "alpha";
       else if (key === "clear") query.value = "";
@@ -407,10 +412,13 @@ function bindProductKeypad() {
       draft.productQuery = query.value;
       renderProductResults(query.value);
       if (key === "mode") paint();
-      query.focus();
     }));
   }
-  modeButton.addEventListener("click", () => { draft.keypadMode = draft.keypadMode === "alpha" ? "number" : "alpha"; paint(); });
+  modeButton.addEventListener("click", () => {
+    query.blur();
+    draft.keypadMode = draft.keypadMode === "alpha" ? "number" : "alpha";
+    paint();
+  });
   paint();
 }
 
