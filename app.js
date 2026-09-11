@@ -1,8 +1,8 @@
 import { createClient } from "@supabase/supabase-js";
+import logoUrl from "./assets/sun_nishimura_logo.jpg";
 import { clearOrderData } from "./order-privacy.js";
 import {
   SYNC_EVENT_NAME,
-  RECEIPT_EVENT_NAME,
   orderFromRow,
   orderLabel,
   orderMatches,
@@ -104,6 +104,7 @@ function clearError() {
 }
 
 function showLogin(message = "") {
+  $("connectionView").classList.add("hidden");
   state.dataEpoch++;
   clearCurrentOrder();
   clearInterval(state.syncTimer);
@@ -350,7 +351,7 @@ async function openForSession(session) {
       .eq("active", true)
       .maybeSingle();
     if (profileError) throw profileError;
-    if (!profile) throw new Error("このアカウントには有効なスタッフ権限がありません。");
+    if (!profile) throw new Error("STAFF_DISABLED");
     const [products, accounts] = await Promise.all([fetchAllProducts(), fetchAccountOptions()]);
     state.session = session;
     state.profile = profile;
@@ -362,12 +363,39 @@ async function openForSession(session) {
   } catch (error) {
     console.error(error);
     state.authUserId = "";
-    await supabase.auth.signOut();
-    showLogin(error.message || "商品マスタを取得できませんでした。");
+    if (error.message === "STAFF_DISABLED") {
+      await supabase.auth.signOut({ scope: "local" });
+      showLogin("このアカウントには有効なスタッフ権限がありません。");
+    } else showConnectionRetry();
+  }
+}
+
+function showConnectionRetry() {
+  $("loginView").classList.add("hidden");
+  $("connectionView").classList.remove("hidden");
+  $("connectionMessage").textContent = "接続できませんでした。ログイン情報は保持しています。通信を確認して再接続してください。";
+  $("retryConnection").disabled = false;
+}
+
+async function restoreSession() {
+  $("loginView").classList.add("hidden");
+  $("connectionView").classList.remove("hidden");
+  $("connectionMessage").textContent = "ログイン状態を確認しています…";
+  $("retryConnection").disabled = true;
+  try {
+    const { data: { session }, error } = await supabase.auth.getSession();
+    if (error) throw error;
+    if (session) await openForSession(session);
+    else showLogin();
+  } catch (error) {
+    console.error(error);
+    showConnectionRetry();
   }
 }
 
 function showApp() {
+  $("connectionView").classList.add("hidden");
+  $("loginPassword").value = "";
   $("loginView").classList.add("hidden");
   $("receiptView").classList.add("hidden");
   $("appView").classList.remove("hidden");
@@ -394,16 +422,17 @@ async function boot() {
     showLogin("Supabaseの公開接続設定がありません。VITE_SUPABASE_URL と VITE_SUPABASE_ANON_KEY を設定してください。");
     return;
   }
-  const { data: { session }, error } = await supabase.auth.getSession();
-  if (error) console.error(error);
-  if (session) await openForSession(session);
-  else showLogin();
   supabase.auth.onAuthStateChange((event, nextSession) => {
-    queueMicrotask(() => {
-      if (event === "SIGNED_OUT" || !nextSession) showLogin();
-      else if (event === "SIGNED_IN") openForSession(nextSession);
-    });
+    // Run database requests after the Auth callback releases its storage lock.
+    setTimeout(() => {
+      if (event === "SIGNED_OUT") showLogin();
+      else if (nextSession) {
+        state.session = nextSession;
+        if (event === "SIGNED_IN") openForSession(nextSession);
+      }
+    }, 0);
   });
+  await restoreSession();
 }
 
 function freshDraft() {
@@ -500,11 +529,13 @@ function resolveProducts(query) {
 function findSuggestions(query, limit = 12) {
   const syntax = syntaxKey(query);
   const compact = compactKey(query);
-  if (!syntax || !compact) return [];
+  if (!syntax) return [];
   const exact = resolveProducts(query);
   const seen = new Set(exact.map((product) => product.code));
+  const nameQuery = query.normalize("NFKC").trim().toLowerCase();
   const prefix = state.products.filter((product) => !seen.has(product.code)
-    && (product.syntax.startsWith(syntax) || product.compact.startsWith(compact)));
+    && (product.syntax.startsWith(syntax) || (compact && product.compact.startsWith(compact))
+      || product.name.normalize("NFKC").toLowerCase().includes(nameQuery)));
   return [...exact, ...prefix].slice(0, limit);
 }
 
@@ -536,16 +567,16 @@ function renderProductStep() {
       <p class="stepIntro">品番を入力して追加してください。すべての商品を入れ終わったら次へ進みます。</p>
       <div class="productSearch">
         <form id="productSearchForm" class="productSearchRow" autocomplete="off">
-          <input id="productQ" type="search" inputmode="search" placeholder="1053 / No.1053 / 141-712" aria-label="品番">
+          <input id="productQ" type="search" inputmode="search" placeholder="品番・商品名で検索" aria-label="品番・商品名">
           <button id="addExactButton" class="primary compact" type="submit">追加</button>
           <button id="clearPQ" class="secondary compact" type="button" aria-label="検索をクリア">×</button>
         </form>
         <div class="masterLine">商品マスタ ${state.products.length.toLocaleString("ja-JP")}件・品番の全角／No.／ハイフンなし検索に対応</div>
+        <div id="productResults" class="productResults" role="listbox" aria-label="商品候補"></div>
         <div class="productKeypadDock">
           <div class="keypadTitle"><b>固定入力キー</b><button id="keypadMode" class="keypadModeLabel" type="button">数字・記号</button></div>
           <div id="productKeypad" class="productKeypad numberKeys"></div>
         </div>
-        <div id="productResults" class="productResults" role="listbox" aria-label="商品候補"></div>
       </div>
       <div class="section productCartSection">
         <div class="sectionTitle">注文明細 <span id="cartCount">0点</span></div>
@@ -565,7 +596,7 @@ function renderProductStep() {
     addExactQuery();
   });
   $("productSearchForm").addEventListener("submit", (event) => { event.preventDefault(); addExactQuery(); });
-  $("clearPQ").addEventListener("click", () => { query.value = ""; draft.productQuery = ""; renderProductResults(""); query.focus(); });
+  $("clearPQ").addEventListener("click", () => { query.value = ""; draft.productQuery = ""; renderProductResults(""); focusProductInput(query); });
   $("toType").addEventListener("click", () => {
     if (!draft.items.length) return showError("商品を1点以上追加してください。");
     draft.stage = "type";
@@ -854,8 +885,8 @@ function renderReceipt() {
   $("receiptCard").innerHTML = `
     <div class="receiptHeaderSimple">
       <div class="receiptBrandBlock">
-        <img class="receiptBrandLogo" src="./assets/sun_nishimura_logo.jpg" alt="株式会社サンニシムラ">
-        <div><div class="receiptBrandName">株式会社サンニシムラ</div><div class="receiptBrandSub">SAN NISHIMURA CO., LTD.<br>${escapeHtml(RECEIPT_EVENT_NAME)}</div></div>
+        <img class="receiptBrandLogo" src="${logoUrl}" alt="株式会社サンニシムラ">
+        <div><div class="receiptBrandName">株式会社サンニシムラ</div><div class="receiptBrandSub">SAN NISHIMURA CO., LTD.</div></div>
       </div>
       <div class="receiptDocMeta"><div class="receiptDocTitle">展示会 注文書</div><div class="receiptDocSub">Exhibition Order Receipt</div><div class="receiptMetaLine"><b>注文番号</b> ${escapeHtml(orderNumber(draft))}<br><b>作成日時</b> ${escapeHtml(new Date(date).toLocaleString("ja-JP"))}</div></div>
     </div>
@@ -870,10 +901,11 @@ function renderReceipt() {
       <div class="receiptMemoStack">${notesHtml}</div>
       <div><div class="receiptSummaryBox"><div class="receiptSummaryRow"><span>点数</span><span>${totalQuantity(draft.items)}</span></div><div class="receiptSummaryRow total"><span>合計</span><span>${yen(totalPrice(draft.items))}</span></div></div><div class="receiptCurrencyNote">通貨：JPY</div></div>
     </div>
-    <div class="receiptFooterMini"><span>株式会社サンニシムラ</span><span>${escapeHtml(RECEIPT_EVENT_NAME)}・${escapeHtml(orderNumber(draft))}</span></div>`;
+    <div class="receiptFooterMini"><span>株式会社サンニシムラ</span><span>注文番号 ${escapeHtml(orderNumber(draft))}</span></div>`;
 }
 
 function bindStaticEvents() {
+  $("retryConnection").addEventListener("click", restoreSession);
   $("loginForm").addEventListener("submit", async (event) => {
     event.preventDefault();
     if (!supabase) return;
@@ -891,7 +923,7 @@ function bindStaticEvents() {
     if (state.saving) return;
     closeSheet();
     if (isLocalDemo) return showLogin("ローカル確認モードを終了しました。");
-    await supabase.auth.signOut();
+    await supabase.auth.signOut({ scope: "local" });
   });
   $("newOrderButton").addEventListener("click", startNewOrder);
   $("startNextOrderButton").addEventListener("click", startNewOrder);
@@ -906,10 +938,26 @@ function bindStaticEvents() {
     openSheet();
     renderDraft();
   });
-  $("printButton").addEventListener("click", () => window.print());
-  window.addEventListener("online", () => syncOrders({ quiet: true }));
+  $("printButton").addEventListener("click", async () => {
+    const button = $("printButton");
+    button.disabled = true;
+    try {
+      const logo = $("receiptCard").querySelector(".receiptBrandLogo");
+      await logo.decode();
+      await document.fonts.ready;
+      window.print();
+    } catch {
+      toast("ロゴを読み込めませんでした。通信を確認して再度お試しください。");
+    } finally { button.disabled = false; }
+  });
+  window.addEventListener("online", () => {
+    if (!state.authUserId && supabase && !isLocalDemo) restoreSession();
+    else syncOrders({ quiet: true });
+  });
   document.addEventListener("visibilitychange", () => {
-    if (document.visibilityState === "visible") syncOrders({ quiet: true });
+    if (document.visibilityState !== "visible") return;
+    if (!state.authUserId && supabase && !isLocalDemo && !$("connectionView").classList.contains("hidden")) restoreSession();
+    else syncOrders({ quiet: true });
   });
   window.addEventListener("afterprint", () => {
     if (!$("receiptView").classList.contains("hidden")) {

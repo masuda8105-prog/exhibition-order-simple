@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { HANDOFF, ORDER_TYPE } from "../order-domain.js";
-import { orderFromRow, orderLabel, orderMatches, payloadForOrder } from "../order-sync.js";
+import { orderFromRow, orderLabel, orderMatches, orderNumber, payloadForOrder } from "../order-sync.js";
 
 test("共有注文を既存ツール互換のpayloadへ変換し復元できる", () => {
   const source = {
@@ -26,4 +26,12 @@ test("履歴検索は店舗・顧客・品番・商品名を対象にする", ()
   const order = { store: "西村眼鏡店", customer: "田中様", phone: "06-1234-5678", items: [{ code: "141-712", name: "鼻盛パッド" }] };
   for (const query of ["西村", "田中", "5678", "141-712", "鼻盛"]) assert.equal(orderMatches(order, query), true);
   assert.equal(orderMatches(order, "該当なし"), false);
+});
+
+test("注文番号は既存データを書き換えず短縮し、再表示しても変わらない", () => {
+  const saved = { localId: "abcdef12-1234-4000-8000-123456789012", createdAt: "2026-09-10T23:00:00Z" };
+  assert.equal(orderNumber(saved), "260911-ABCDEF12");
+  assert.equal(orderNumber({ ...saved, receiptNo: "受付-20260911-ABCDEF12" }), "260911-ABCDEF12");
+  assert.equal(orderNumber({ ...saved, orderNo: "SN-001" }), "SN-001");
+  assert.equal(orderNumber({}), "登録前");
 });

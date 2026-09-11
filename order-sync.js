@@ -2,10 +2,18 @@ import { HANDOFF, ORDER_TYPE } from "./order-domain.js";
 
 // Separate order group: production keeps its own event_name filter.
 export const SYNC_EVENT_NAME = "exhibition-order-simple";
-export const RECEIPT_EVENT_NAME = "NEO TOKYO 2026";
 
 export function orderNumber(order) {
-  return order?.receiptNo || order?.orderNo || order?.localId || "登録前";
+  const original = order?.receiptNo || order?.orderNo || "";
+  const previousReceipt = /^受付-(\d{8})-([A-Z0-9]{8})$/i.exec(original);
+  if (previousReceipt) return `${previousReceipt[1].slice(2)}-${previousReceipt[2].toUpperCase()}`;
+  if (original) return original;
+  if (!order?.localId) return "登録前";
+  const date = new Date(order.createdAt || "");
+  const stamp = Number.isNaN(date.getTime()) ? "" : new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Tokyo", year: "2-digit", month: "2-digit", day: "2-digit",
+  }).format(date).replaceAll("-", "");
+  return `${stamp ? `${stamp}-` : ""}${order.localId.slice(0, 8).toUpperCase()}`;
 }
 
 export function orderLabel(order) {
@@ -85,7 +93,7 @@ export function orderMatches(order, query) {
   const normalized = String(query || "").trim().toLowerCase();
   if (!normalized) return true;
   return [
-    orderNumber(order), order?.store, order?.customer, order?.phone,
+    orderNumber(order), order?.receiptNo, order?.orderNo, order?.localId, order?.store, order?.customer, order?.phone,
     ...(order?.items || []).flatMap((item) => [item.code, item.name]),
   ].join(" ").toLowerCase().includes(normalized);
 }
