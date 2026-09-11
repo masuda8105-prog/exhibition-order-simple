@@ -166,6 +166,8 @@ h2 { margin: 0; }
 .alphaKeys .keypadKey { min-height: 34px; font-size: 11px; }
 .keypadKey:active { transform: translateY(1px); background: #dbe8ff; }
 .keypadKey.addKey { background: #1849a9; color: #fff; }
+.keypadKey.shippingKey { grid-column: 1 / -1; min-height: 44px; margin-top: 4px; background: #fff; color: #1849a9; }
+.shippingAmount { font-size: 13px; font-weight: 850; }
 .summaryRow { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; padding: 7px 0; border-bottom: 1px solid var(--line); font-size: 13px; }
 .summaryRow:last-child { border-bottom: 0; }
 .summaryRow span { color: var(--muted); }

@@ -13,6 +13,8 @@ import {
   ORDER_TYPE,
   HANDOFF,
   PAYMENT,
+  isShipping,
+  withShipping,
   compactKey,
   phoneHasUnexpectedCharacters,
   syntaxKey,
@@ -572,11 +574,11 @@ function renderProductStep() {
           <button id="clearPQ" class="secondary compact" type="button" aria-label="検索をクリア">×</button>
         </form>
         <div class="masterLine">商品マスタ ${state.products.length.toLocaleString("ja-JP")}件・品番の全角／No.／ハイフンなし検索に対応</div>
-        <div id="productResults" class="productResults" role="listbox" aria-label="商品候補"></div>
         <div class="productKeypadDock">
           <div class="keypadTitle"><b>固定入力キー</b><button id="keypadMode" class="keypadModeLabel" type="button">数字・記号</button></div>
           <div id="productKeypad" class="productKeypad numberKeys"></div>
         </div>
+        <div id="productResults" class="productResults" role="listbox" aria-label="商品候補"></div>
       </div>
       <div class="section productCartSection">
         <div class="sectionTitle">注文明細 <span id="cartCount">0点</span></div>
@@ -598,7 +600,7 @@ function renderProductStep() {
   $("productSearchForm").addEventListener("submit", (event) => { event.preventDefault(); addExactQuery(); });
   $("clearPQ").addEventListener("click", () => { query.value = ""; draft.productQuery = ""; renderProductResults(""); focusProductInput(query); });
   $("toType").addEventListener("click", () => {
-    if (!draft.items.length) return showError("商品を1点以上追加してください。");
+    if (!draft.items.some((item) => !isShipping(item))) return showError("商品を1点以上追加してください。");
     draft.stage = "type";
     renderDraft();
   });
@@ -619,11 +621,18 @@ function bindProductKeypad() {
     const values = draft.keypadMode === "alpha" ? alpha : numeric;
     wrap.className = `productKeypad ${draft.keypadMode === "alpha" ? "alphaKeys" : "numberKeys"}`;
     wrap.innerHTML = values.map((key) => `<button type="button" class="keypadKey" data-key="${escapeHtml(key)}">${escapeHtml(key)}</button>`).join("")
-      + '<div class="keypadUtility"><button type="button" class="keypadKey" data-key="mode">数字／英字</button><button type="button" class="keypadKey" data-key="clear">クリア</button><button type="button" class="keypadKey addKey" data-key="add">追加</button></div>';
+      + '<div class="keypadUtility"><button type="button" class="keypadKey" data-key="mode">数字／英字</button><button type="button" class="keypadKey" data-key="clear">クリア</button><button type="button" class="keypadKey addKey" data-key="add">追加</button></div><button type="button" class="keypadKey shippingKey" data-key="shipping">＋ 送料500円</button>';
     modeButton.textContent = draft.keypadMode === "alpha" ? "英字・記号" : "数字・記号";
     wrap.querySelectorAll("[data-key]").forEach((button) => button.addEventListener("click", () => {
       query.blur();
       const key = button.dataset.key;
+      if (key === "shipping") {
+        const alreadyAdded = draft.items.some(isShipping);
+        draft.items = withShipping(draft.items);
+        renderCart();
+        toast(alreadyAdded ? "送料500円は追加済みです" : "送料500円を追加しました");
+        return;
+      }
       if (key === "mode") draft.keypadMode = draft.keypadMode === "alpha" ? "number" : "alpha";
       else if (key === "clear") query.value = "";
       else if (key === "add") return addExactQuery();
@@ -667,18 +676,19 @@ function renderCart() {
   const draft = state.draft;
   const wrap = $("cartLines");
   $("cartCount").textContent = `${totalQuantity(draft.items)}点`;
-  $("toType").disabled = !draft.items.length;
+  $("toType").disabled = !draft.items.some((item) => !isShipping(item));
   if (!draft.items.length) {
     wrap.innerHTML = '<div class="empty compactEmpty">商品はまだありません。</div>';
     return;
   }
   wrap.innerHTML = draft.items.map((item, index) => `
     <div class="cartLine" data-item-index="${index}">
-      <div><b>No.${escapeHtml(item.code)}</b><small>${escapeHtml(item.name)}</small></div>
+      <div><b>${isShipping(item) ? "送料" : `No.${escapeHtml(item.code)}`}</b><small>${escapeHtml(item.name)}</small></div>
       <div class="qty">
+        ${isShipping(item) ? '<span class="shippingAmount">¥500（一律）</span>' : `
         <button type="button" data-qty-action="minus" aria-label="数量を減らす">−</button>
         <input type="number" min="1" max="999" inputmode="numeric" value="${item.qty}" data-qty-action="input" aria-label="数量">
-        <button type="button" data-qty-action="plus" aria-label="数量を増やす">＋</button>
+        <button type="button" data-qty-action="plus" aria-label="数量を増やす">＋</button>`}
         <button type="button" class="remove" data-qty-action="remove" aria-label="削除">×</button>
       </div>
     </div>`).join("");
@@ -717,7 +727,7 @@ function renderTypeStep() {
           <div class="choiceGrid handoffChoices">
             <button class="choice ${draft.handoff === HANDOFF.NOW ? "on" : ""}" type="button" data-handoff="now"><b>1　在庫あり・その場渡し</b><small>会計して、その場で商品をお渡しします。</small></button>
             <button class="choice ${draft.handoff === HANDOFF.LATER ? "on" : ""}" type="button" data-handoff="later"><b>2　翌日・翌々日に受取</b><small>受取予定日と会計状況を入力します。</small></button>
-            <button class="choice ${draft.handoff === HANDOFF.HOTEL ? "on" : ""}" type="button" data-handoff="hotel"><b>3　ホテルへ配送</b><small>ホテル名と宿泊者情報を入力します。</small></button>
+            <button class="choice ${draft.handoff === HANDOFF.HOTEL ? "on" : ""}" type="button" data-handoff="hotel"><b>3　ホテルへ配送</b><small>ホテル名・宿泊者情報は任意です（別紙記入可）。</small></button>
             <button class="choice ${draft.handoff === HANDOFF.SHIP ? "on" : ""}" type="button" data-handoff="ship"><b>4　指定住所へ配送</b><small>配送先住所を入力します。</small></button>
           </div>
         </div>` : ""}
@@ -760,15 +770,16 @@ function renderInfoStep() {
   const pickupFields = draft.handoff === HANDOFF.LATER ? `
     <div class="field"><label for="fPickup">受取予定日 *</label><div class="quickDates"><button type="button" data-day="1" class="${draft.pickupDate === dateOffset(1) ? "on" : ""}">明日</button><button type="button" data-day="2" class="${draft.pickupDate === dateOffset(2) ? "on" : ""}">明後日</button></div><input id="fPickup" type="date" min="${dateOffset(1)}" value="${escapeHtml(draft.pickupDate)}"></div>` : "";
   const destinationFields = draft.handoff === HANDOFF.HOTEL ? `
-    <div class="field"><label for="fHotel">ホテル名 *</label><input id="fHotel" value="${escapeHtml(draft.hotelName)}"></div>
-    <div class="two"><div class="field"><label for="fGuest">宿泊者名 *</label><input id="fGuest" value="${escapeHtml(draft.guestName || draft.customer)}"></div><div class="field"><label for="fRoom">部屋番号（任意）</label><input id="fRoom" value="${escapeHtml(draft.roomNo)}"></div></div>
+    <div class="hintBox">ホテル・宿泊情報は別紙への記入でも構いません。以下は空欄で進めます。</div>
+    <div class="field"><label for="fHotel">ホテル名（任意）</label><input id="fHotel" value="${escapeHtml(draft.hotelName)}"></div>
+    <div class="two"><div class="field"><label for="fGuest">宿泊者名（任意）</label><input id="fGuest" value="${escapeHtml(draft.guestName)}"></div><div class="field"><label for="fRoom">部屋番号（任意）</label><input id="fRoom" value="${escapeHtml(draft.roomNo)}"></div></div>
     <div class="field"><label for="fCheckout">チェックアウト予定日</label><input id="fCheckout" type="date" value="${escapeHtml(draft.checkoutDate)}"></div>`
     : draft.handoff === HANDOFF.SHIP ? `<div class="field"><label for="fShip">配送先住所 *</label><textarea id="fShip">${escapeHtml(draft.shipAddress)}</textarea></div>` : "";
   const spotFields = `
     <div class="field"><label for="fCustomer">お客様名 *</label><input id="fCustomer" value="${escapeHtml(draft.customer)}" autocomplete="name"></div>
     <div class="two"><div class="field"><label for="fRegion">お客様</label><select id="fRegion"><option value="domestic" ${draft.customerRegion === "domestic" ? "selected" : ""}>国内</option><option value="overseas" ${draft.customerRegion === "overseas" ? "selected" : ""}>海外</option></select></div><div class="field"><label for="fPayment">会計方法 *</label><select id="fPayment"><option value="credit" ${draft.paymentMethod === PAYMENT.CREDIT ? "selected" : ""}>クレジット</option><option value="cash" ${draft.paymentMethod === PAYMENT.CASH ? "selected" : ""}>現金</option></select></div></div>
     ${paymentFields}${pickupFields}${destinationFields}`;
-  const itemSummary = draft.items.map((item) => `<div class="summaryRow"><span>${escapeHtml(item.code)} ${escapeHtml(item.name)} × ${item.qty}</span><b>${normal ? `${item.qty}点` : yen(item.price * item.qty)}</b></div>`).join("");
+  const itemSummary = draft.items.map((item) => `<div class="summaryRow"><span>${isShipping(item) ? "送料（一律）" : `${escapeHtml(item.code)} ${escapeHtml(item.name)} × ${item.qty}`}</span><b>${normal && !isShipping(item) ? `${item.qty}点` : yen(item.price * item.qty)}</b></div>`).join("");
   $("sheetBody").innerHTML = `
     <div class="step">
       <div class="section">

@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { HANDOFF, ORDER_TYPE } from "../order-domain.js";
+import { HANDOFF, ORDER_TYPE, withShipping, totalPrice, totalQuantity } from "../order-domain.js";
 import { orderFromRow, orderLabel, orderMatches, orderNumber, payloadForOrder } from "../order-sync.js";
 
 test("共有注文を既存ツール互換のpayloadへ変換し復元できる", () => {
@@ -34,4 +34,12 @@ test("注文番号は既存データを書き換えず短縮し、再表示し�
   assert.equal(orderNumber({ ...saved, receiptNo: "受付-20260911-ABCDEF12" }), "260911-ABCDEF12");
   assert.equal(orderNumber({ ...saved, orderNo: "SN-001" }), "SN-001");
   assert.equal(orderNumber({}), "登録前");
+});
+
+test("送料は共有保存から復元しても金額・点数が変わらない", () => {
+  const order = { items: withShipping([{ code: "TEST", name: "テスト商品", price: 1000, qty: 2 }]) };
+  const restored = orderFromRow({ id: "test-id", payload: payloadForOrder(order) });
+  assert.equal(totalPrice(restored.items), 2500);
+  assert.equal(totalQuantity(restored.items), 2);
+  assert.equal(totalPrice(withShipping(restored.items)), 2500);
 });

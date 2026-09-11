@@ -1,6 +1,12 @@
 export const ORDER_TYPE = Object.freeze({ NORMAL: "normal", SPOT: "spot" });
 export const HANDOFF = Object.freeze({ NOW: "now", LATER: "later", HOTEL: "hotel", SHIP: "ship" });
 export const PAYMENT = Object.freeze({ CREDIT: "credit", CASH: "cash" });
+export const SHIPPING_CODE = "送料";
+export const SHIPPING_PRICE = 500;
+export function isShipping(item) { return item?.code === SHIPPING_CODE; }
+export function withShipping(items = []) {
+  return [...items.filter((item) => !isShipping(item)), { code: SHIPPING_CODE, name: "送料（一律）", price: SHIPPING_PRICE, qty: 1 }];
+}
 
 export function normalizeText(value) {
   return String(value ?? "").normalize("NFKC").trim().toLowerCase();
@@ -40,7 +46,7 @@ export function paymentLabel(method) {
 }
 
 export function totalQuantity(items = []) {
-  return items.reduce((sum, item) => sum + Number(item.qty || 0), 0);
+  return items.reduce((sum, item) => sum + (isShipping(item) ? 0 : Number(item.qty || 0)), 0);
 }
 
 export function totalPrice(items = []) {
@@ -48,7 +54,7 @@ export function totalPrice(items = []) {
 }
 
 export function validateDraft(draft) {
-  if (!draft.items?.length) return "商品を1点以上追加してください。";
+  if (!draft.items?.some((item) => !isShipping(item))) return "商品を1点以上追加してください。";
   if (!draft.type) return "注文方法を選択してください。";
   if (draft.type === ORDER_TYPE.SPOT && !draft.handoff) return "商品の渡し方を選択してください。";
   if (!String(draft.store || "").trim()) return "店舗名を入力してください。";
@@ -61,8 +67,6 @@ export function validateDraft(draft) {
   if (!String(draft.customer || "").trim()) return "お客様名を入力してください。";
   if (!draft.paymentMethod) return "会計方法を選択してください。";
   if (draft.handoff === HANDOFF.LATER && !draft.pickupDate) return "受取予定日を入力してください。";
-  if (draft.handoff === HANDOFF.HOTEL && !String(draft.hotelName || "").trim()) return "ホテル名を入力してください。";
-  if (draft.handoff === HANDOFF.HOTEL && !String(draft.guestName || "").trim()) return "宿泊者名を入力してください。";
   if (draft.handoff === HANDOFF.SHIP && !String(draft.shipAddress || "").trim()) return "配送先住所を入力してください。";
   return "";
 }
