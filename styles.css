@@ -140,6 +140,20 @@ h2 { margin: 0; }
 .productRow b { display: block; }
 .productRow small { display: block; margin-top: 2px; color: var(--muted); }
 .productPrice { display: block; margin-top: 6px; font-size: 14px; font-weight: 850; font-variant-numeric: tabular-nums; }
+.slackSharePanel { margin: 0 0 16px; padding: 14px; border: 1px solid var(--line); border-radius: 14px; background: #fff; }
+.slackShareCheck { display: flex; align-items: center; gap: 10px; min-height: 44px; font-size: 15px; font-weight: 900; cursor: pointer; }
+.slackShareCheck input { flex: 0 0 22px; width: 22px; height: 22px; margin: 0; accent-color: #12b76a; }
+.slackShareCheck span { min-width: 0; }
+.slackSharePanel p, .slackSharePanel small { display: block; margin: 6px 0 0; color: var(--muted); font-size: 12px; line-height: 1.65; }
+.slackShareRow { display: flex; align-items: center; gap: 8px; min-width: 0; flex-wrap: wrap; }
+.slackShareRow .slackShareCheck { flex: 1; min-width: 0; }
+.slackShareRow .slackShareCheck span { white-space: nowrap; }
+.slackSharePrint { flex: 0 0 64px; padding: 0 10px; min-height: 48px; font-size: 14px; white-space: nowrap; background: #eef4ff; border-color: #c7d7fe; color: #1849a9; }
+.pickupBadge { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 10px 0; padding: 10px 12px; border: 2px solid #111827; border-radius: 12px; background: #fff; font-size: 13px; }
+.pickupBadge b { font-size: 24px; overflow-wrap: anywhere; }
+.receiptPickupNumber { display: grid; gap: 3px; margin: 0 0 18px; padding: 12px; border: 3px solid #111827; text-align: center; break-inside: avoid; }
+.receiptPickupNumber strong { font-size: 38px; line-height: 1.2; overflow-wrap: anywhere; }
+.receiptPickupNumber small { font-size: 11px; }
 .productRow.exact { padding: 9px; border: 2px solid #12b76a; background: #ecfdf3; }
 .productCodeLine { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
 .matchBadge { display: inline-flex; align-items: center; min-height: 21px; padding: 2px 7px; border-radius: 99px; background: #067647; color: #fff; font-size: 10px; font-style: normal; font-weight: 950; }
@@ -318,7 +332,7 @@ h2 { margin: 0; }
   html, body { width: 100% !important; min-height: 0 !important; margin: 0 !important; padding: 0 !important; overflow: visible !important; background: #fff !important; }
   body > *:not(#receiptView) { display: none !important; }
   #receiptView { display: block !important; width: 100% !important; min-height: 0 !important; margin: 0 !important; padding: 0 !important; }
-  .receiptToolbar, .receiptActions, .printedActions, .printPrivacyNotice { display: none !important; }
+  .receiptToolbar, .receiptActions, .printedActions, .printPrivacyNotice, #receiptOperations { display: none !important; }
   .receiptSheet { width: 100% !important; max-width: none !important; min-height: 0 !important; margin: 0 !important; padding: 0 !important; border: 0 !important; border-radius: 0 !important; box-shadow: none !important; }
   .receiptHeaderSimple { grid-template-columns: minmax(0, 1fr) 230px !important; gap: 9px !important; padding-bottom: 7px !important; }
   .receiptBrandBlock { display: flex !important; align-items: center !important; gap: 12px !important; }

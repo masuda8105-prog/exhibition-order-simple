@@ -1,6 +1,21 @@
 export const ORDER_TYPE = Object.freeze({ NORMAL: "normal", SPOT: "spot" });
 export const HANDOFF = Object.freeze({ NOW: "now", LATER: "later", HOTEL: "hotel", SHIP: "ship" });
 export const PAYMENT = Object.freeze({ CREDIT: "credit", CASH: "cash" });
+export function isPickupOrder(order) { return order?.type === ORDER_TYPE.SPOT && order?.handoff === HANDOFF.LATER; }
+export function needsSlackShare(order) { return order?.type === ORDER_TYPE.SPOT && [HANDOFF.LATER, HANDOFF.HOTEL, HANDOFF.SHIP].includes(order?.handoff); }
+export function workflowStatus(order) {
+  if (!needsSlackShare(order)) return "done";
+  if (isPickupOrder(order) && order.delivered) return "done";
+  return order.slackShared ? (isPickupOrder(order) ? "waiting" : "done") : "active";
+}
+export function setSlackShared(order, shared, now = new Date().toISOString()) {
+  if (!needsSlackShare(order)) return { ...order };
+  const next = { ...order, slackShared: Boolean(shared), slackSharedAt: shared ? (order.slackSharedAt || now) : "" };
+  return { ...next, workflowStatus: workflowStatus(next) };
+}
+export function pickupNumber(order) {
+  return isPickupOrder(order) && /^[1-9]\d*$/.test(String(order.pickupNumber || "")) ? `JEX-${order.pickupNumber}` : "";
+}
 export const SHIPPING_CODE = "送料";
 export const SHIPPING_PRICE = 500;
 export function isShipping(item) { return item?.code === SHIPPING_CODE; }

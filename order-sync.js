@@ -1,4 +1,4 @@
-import { HANDOFF, ORDER_TYPE } from "./order-domain.js";
+import { HANDOFF, ORDER_TYPE, pickupNumber, workflowStatus } from "./order-domain.js";
 
 // Separate order group: production keeps its own event_name filter.
 export const SYNC_EVENT_NAME = "exhibition-order-simple";
@@ -27,9 +27,6 @@ export function orderLabel(order) {
 }
 
 export function payloadForOrder(order) {
-  const workflowStatus = order.type === ORDER_TYPE.NORMAL || order.handoff === HANDOFF.NOW
-    ? "done"
-    : order.workflowStatus || "active";
   return {
     receiptNo: order.receiptNo || "",
     type: order.type || "",
@@ -38,7 +35,7 @@ export function payloadForOrder(order) {
     store: order.store || "",
     phone: order.phone || "",
     customer: order.customer || "",
-    workflowStatus,
+    workflowStatus: workflowStatus(order),
     account: order.account || "",
     accountChoice: order.accountChoice || "",
     accountOther: order.accountOther || "",
@@ -80,6 +77,7 @@ export function orderFromRow(row) {
     : {};
   return {
     ...payload,
+    pickupNumber: row?.simple_pickup_number == null ? "" : String(row.simple_pickup_number),
     items: Array.isArray(payload.items) ? payload.items.map((item) => ({ ...item })) : [],
     localId: String(row?.id || ""),
     createdAt: row?.created_at || "",
@@ -93,7 +91,7 @@ export function orderMatches(order, query) {
   const normalized = String(query || "").trim().toLowerCase();
   if (!normalized) return true;
   return [
-    orderNumber(order), order?.receiptNo, order?.orderNo, order?.localId, order?.store, order?.customer, order?.phone,
+    orderNumber(order), pickupNumber(order), order?.receiptNo, order?.orderNo, order?.localId, order?.store, order?.customer, order?.phone,
     ...(order?.items || []).flatMap((item) => [item.code, item.name]),
   ].join(" ").toLowerCase().includes(normalized);
 }

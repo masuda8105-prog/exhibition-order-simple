@@ -75,6 +75,10 @@
 
 ## 最終確認・残る現地確認
 
+- 2026-09-14: ユーザー指示に基づきNEO側の採番トリガーへSIMPLE除外条件を追加。番号列・カウンター・予約を展示会別に分離。既存NEO注文・発行済み番号は更新しない。RLS・既存権限は変更なし。
+- 2026-09-14: SIMPLE専用の非公開採番スキーマ・RLS・カウンター・予約表と、既存注文表のnullable採番列／一意索引を追加。既存注文payloadは書換えず、既存国内ツールの注文グループには採番しない。トリガーは空search_path、実スタッフ確認、EXECUTE権限剥奪を行い、非公開表にアクセスするためだけにSECURITY DEFINERを使用。
+- 新しい採番表は直接アクセスを拒否する目的でRLSポリシーなし。Advisorの[No Policy情報](https://supabase.com/docs/guides/database/database-linter?lint=0008_rls_enabled_no_policy)はこの意図的な拒否設定。新規関数には公開EXECUTE警告なし。
+- 既存の別機能について[public拡張](https://supabase.com/docs/guides/database/database-linter?lint=0014_extension_in_public)、[既存SECURITY DEFINER公開実行](https://supabase.com/docs/guides/database/database-linter?lint=0028_anon_security_definer_function_executable)、[認証ユーザーの実行権限](https://supabase.com/docs/guides/database/database-linter?lint=0029_authenticated_security_definer_function_executable)、[漏洩パスワード保護無効](https://supabase.com/docs/guides/auth/password-security#password-strength-and-leaked-password-protection)の警告あり。既存ツールへ影響するため本修正では変更していない。
 - 2026-09-04: 公開先のHTTP 200、本番アセット配信、構文・単体テスト・公開前監査を再確認
 - 2026-09-08: 印刷画面を閉じても注文を保持し、共有一覧から再編集・再印刷できるよう変更
 - `exhibition_app_orders` をRealtime対象に追加し、10秒ごとの再同期も併用。適用前後で既存注文は総数4件・有効2件のまま
