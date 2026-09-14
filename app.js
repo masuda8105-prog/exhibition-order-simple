@@ -662,7 +662,7 @@ function renderProductResults(query) {
   const suggestions = findSuggestions(query);
   wrap.innerHTML = suggestions.length ? suggestions.map((product) => `
     <button type="button" class="productRow ${exactCodes.has(product.code) ? "exact" : ""}" data-product-code="${escapeHtml(product.code)}" role="option">
-      <span><span class="productCodeLine"><b>No.${escapeHtml(product.code)}</b>${exactCodes.has(product.code) ? '<em class="matchBadge">一致</em>' : ""}</span><small>${escapeHtml(product.name)}</small></span>
+      <span><span class="productCodeLine"><b>No.${escapeHtml(product.code)}</b>${exactCodes.has(product.code) ? '<em class="matchBadge">一致</em>' : ""}</span><small>${escapeHtml(product.name)}</small><span class="productPrice">卸単価 ${yen(product.price)}</span></span>
       <span class="addBtn">追加</span>
     </button>`).join("") : '<div class="empty">該当する品番がありません。</div>';
   wrap.classList.add("open");

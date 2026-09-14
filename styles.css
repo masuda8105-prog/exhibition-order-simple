@@ -139,6 +139,7 @@ h2 { margin: 0; }
 .productRow { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: center; padding: 10px; border: 1px solid var(--line); border-radius: 14px; background: #fff; color: var(--ink); text-align: left; overflow-wrap: anywhere; }
 .productRow b { display: block; }
 .productRow small { display: block; margin-top: 2px; color: var(--muted); }
+.productPrice { display: block; margin-top: 6px; font-size: 14px; font-weight: 850; font-variant-numeric: tabular-nums; }
 .productRow.exact { padding: 9px; border: 2px solid #12b76a; background: #ecfdf3; }
 .productCodeLine { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
 .matchBadge { display: inline-flex; align-items: center; min-height: 21px; padding: 2px 7px; border-radius: 99px; background: #067647; color: #fff; font-size: 10px; font-style: normal; font-weight: 950; }
