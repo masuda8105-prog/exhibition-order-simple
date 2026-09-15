@@ -82,3 +82,25 @@ test("海外の控えだけ受け渡し方法を英語にする", () => {
     assert.ok(!label(order).includes(expected));
   }
 });
+
+test("確定保存の失敗・競合では元の未確定状態に戻し、失敗を表示する", async () => {
+  for (const reason of ["NETWORK_ERROR", "SYNC_CONFLICT"]) {
+    const previous = { submissionState: "pending", slackShared: true };
+    const state = { draft: previous };
+    const controls = [{ disabled: false }, { disabled: true }];
+    const errorLabel = { textContent: "", classList: { remove() {} } };
+    let rendered = 0, toasted = 0;
+    const save = runInNewContext(`async ${appFunction("saveReceiptProgress")}; saveReceiptProgress`, {
+      state, document: { querySelectorAll: () => controls }, $: () => errorLabel,
+      persistCurrentDraft: async () => { throw new Error(reason); },
+      renderReceiptOperations: () => rendered++, toast: () => toasted++,
+    });
+    await save({submissionState: "confirmed", slackShared: true}, "成功");
+    assert.equal(state.draft,previous);
+    assert.equal(controls[0].disabled,false);
+    assert.equal(controls[1].disabled,true);
+    assert.equal(toasted,0);
+    assert.equal(rendered,1);
+    assert.ok(errorLabel.textContent.includes(reason === "SYNC_CONFLICT" ? "別のスタッフ" : "保存できません"));
+  }
+});

@@ -50,6 +50,8 @@ export function payloadForOrder(order) {
     headOfficeSharedAt: order.headOfficeSharedAt || "",
     slackShared: Boolean(order.slackShared),
     slackSharedAt: order.slackSharedAt || "",
+    submissionState: order.submissionState || "",
+    confirmedAt: order.confirmedAt || "",
     pickupDate: order.pickupDate || "",
     notes: order.notes || "",
     hotelName: order.hotelName || "",

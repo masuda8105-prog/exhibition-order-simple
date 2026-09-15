@@ -221,6 +221,26 @@ h2 { margin: 0; }
 .receiptBrandName { font-size: 13px; font-weight: 950; letter-spacing: .04em; }
 .receiptBrandSub { margin-top: 3px; color: #667085; font-size: 11px; line-height: 1.45; }
 .receiptMemoStack { display: grid; gap: 7px; }
+.confirmationFlow { margin: 0 auto 18px; padding: 18px; width: min(900px, 100%); border: 2px solid #d6a038; border-radius: 18px; background: #fff; }
+.confirmationHeading { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
+.confirmationHeading h2 { margin: 0; font-size: 19px; }
+.confirmationStatus { padding: 5px 9px; border-radius: 8px; background: #fff2d3; color: #754a00; font-size: 12px; font-weight: 800; }
+.confirmationStatus.done { color: #076541; background: #e5f7ed; }
+.orderCardMeta.orderPending { padding: 7px 9px; color: #754a00; background: #fff2d3; border-radius: 8px; font-weight: 800; }
+.confirmationSteps { display: grid; gap: 0; margin: 16px 0 0; padding: 0; list-style: none; }
+.confirmationSteps li { display: grid; grid-template-columns: 32px minmax(0, 1fr); gap: 12px; padding: 14px 0; border-top: 1px solid var(--line); }
+.confirmationSteps h3 { margin: 0; font-size: 17px; }
+.confirmationSteps p { margin: 7px 0; font-size: 13px; color: #475467; line-height: 1.6; overflow-wrap: anywhere; }
+.flowNumber { display: grid; place-items: center; width: 32px; height: 32px; background: #eef1f5; border-radius: 50%; font-weight: 900; }
+.current .flowNumber { color: white; background: #111827; }
+.done .flowNumber { color: white; background: #08754d; }
+.flowPickup { display: block; margin-top: 5px; font-size: 36px; overflow-wrap: anywhere; }
+.confirmationSteps button { width: 100%; min-height: 48px; white-space: normal; }
+.flowShareCheck { display: flex; align-items: center; gap: 12px; margin-top: 12px; min-height: 70px; padding: 12px; border: 2px solid #667085; border-radius: 12px; cursor: pointer; font-weight: 850; }
+.flowShareCheck:has(input:checked) { border-color: #08754d; background: #effaf3; }
+.flowShareCheck input { flex: 0 0 24px; width: 24px; height: 24px; accent-color: #08754d; }
+.flowShareCheck small { font-size: 12px; font-weight: 500; }
+.flowError { margin: 8px 0 0; padding: 12px; border: 1px solid #b42318; border-radius: 10px; color: #b42318; background: #fff1f0; }
 .receiptDocMeta { text-align: right; }
 .receiptDocTitle { font-size: 22px; font-weight: 950; line-height: 1.15; }
 .receiptDocSub { margin-top: 3px; color: #667085; font-size: 11px; }
