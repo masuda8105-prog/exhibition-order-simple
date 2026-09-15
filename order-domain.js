@@ -57,7 +57,7 @@ export function handoffLabel(handoff) {
 }
 
 export function paymentLabel(method) {
-  return method === PAYMENT.CASH ? "現金" : "クレジット";
+  return ({ [PAYMENT.CASH]: "現金", [PAYMENT.CREDIT]: "クレジット" })[method] || "未設定";
 }
 
 export function totalQuantity(items = []) {

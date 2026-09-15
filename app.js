@@ -13,6 +13,7 @@ import {
   ORDER_TYPE,
   HANDOFF,
   PAYMENT,
+  paymentLabel,
   isPickupOrder,
   needsSlackShare,
   workflowStatus,
@@ -548,16 +549,20 @@ function findSuggestions(query, limit = 12) {
   return [...exact, ...prefix].slice(0, limit);
 }
 
-function addProduct(product) {
+function addProduct(product, { keepSearch = false } = {}) {
   const existing = state.draft.items.find((item) => item.code === product.code);
   if (existing) existing.qty = Math.min(999, existing.qty + 1);
   else state.draft.items.push({ code: product.code, name: product.name, price: product.price, qty: 1 });
-  state.draft.productQuery = "";
-  $("productQ").value = "";
-  renderProductResults("");
+  // Candidate taps keep the existing DOM and focus so variants can be added
+  // consecutively without moving the list or reopening the mobile keyboard.
+  if (!keepSearch) {
+    state.draft.productQuery = "";
+    $("productQ").value = "";
+    renderProductResults("");
+  }
   renderCart();
   toast(existing ? `No.${product.code} の数量を ${existing.qty} にしました` : `No.${product.code} を追加しました`);
-  focusProductInput($("productQ"));
+  if (!keepSearch) focusProductInput($("productQ"));
 }
 
 function addExactQuery() {
@@ -675,7 +680,7 @@ function renderProductResults(query) {
   wrap.classList.add("open");
   wrap.querySelectorAll("[data-product-code]").forEach((button) => button.addEventListener("click", () => {
     const product = state.products.find((row) => row.code === button.dataset.productCode);
-    if (product) addProduct(product);
+    if (product) addProduct(product, { keepSearch: true });
   }));
 }
 
@@ -930,6 +935,14 @@ function receiptInfo(label, value) {
 }
 
 function receiptHandoffLabel(order) {
+  if (order.customerRegion === "overseas") {
+    if (order.type === ORDER_TYPE.NORMAL) return "Processed after the exhibition";
+    if (order.handoff === HANDOFF.NOW) return "Pay and collect at the venue";
+    if (order.handoff === HANDOFF.LATER) return order.pickupDate ? `Scheduled pickup: ${order.pickupDate}` : "Later pickup";
+    if (order.handoff === HANDOFF.HOTEL) return `Hotel delivery${order.hotelName ? ` (${order.hotelName})` : ""}`;
+    if (order.handoff === HANDOFF.SHIP) return "Delivery to specified address";
+    return "-";
+  }
   if (order.type === ORDER_TYPE.NORMAL) return "帰社後にまとめて印刷";
   if (order.handoff === HANDOFF.NOW) return "その場で会計・お渡し";
   if (order.handoff === HANDOFF.LATER) return order.pickupDate ? `${order.pickupDate} 受取予定` : "後日受取";
@@ -941,31 +954,39 @@ function receiptHandoffLabel(order) {
 function renderReceipt() {
   const draft = state.draft;
   const date = state.createdAt || new Date();
-  const info = [["店舗名", draft.store], ["電話番号", draft.phone], ["お客様名", draft.customer || "-"], ["注文区分", orderLabel(draft)], ["卸屋・帳合先", draft.account || "-"], ["担当", draft.staff || state.profile?.display_name || "-"], ["受け渡し", receiptHandoffLabel(draft)]];
+  const english = draft.customerRegion === "overseas";
+  const t = (ja, en) => english ? en : ja;
+  const company = t("株式会社サンニシムラ", "SAN NISHIMURA CO., LTD.");
+  const typeLabel = english ? (draft.type === ORDER_TYPE.NORMAL ? "Standard order" : "On-site sale") : orderLabel(draft);
+  const payment = english ? ({ cash: "Cash", credit: "Credit card" })[draft.paymentMethod] || "Not specified" : paymentLabel(draft.paymentMethod);
+  const info = [[t("店舗名", "Company / Store"), draft.store], [t("電話番号", "Phone"), draft.phone], [t("お客様名", "Customer"), draft.customer || "-"], [t("注文区分", "Order type"), typeLabel], [t("卸屋・帳合先", "Distributor / Account"), draft.account || "-"], [t("担当", "Staff"), draft.staff || state.profile?.display_name || "-"], [t("受け渡し", "Pickup / Delivery"), receiptHandoffLabel(draft)]];
+  if (draft.type === ORDER_TYPE.SPOT) info.push([t("会計方法", "Payment method"), payment]);
   const rows = draft.items.map((item) => `
-    <tr><td><b>${escapeHtml(item.code)}</b></td><td>${escapeHtml(item.name)}</td><td class="num">${item.qty}</td><td class="num">${yen(item.price)}</td><td class="num"><b>${yen(item.price * item.qty)}</b></td></tr>`).join("");
-  const notesHtml = `${draft.notes ? `<div class="receiptNote"><b>備考</b>${escapeHtml(draft.notes).replace(/\n/g, "<br>")}</div>` : ""}<div class="receiptNote"><b>ご案内</b>内容を確認し、必要に応じて印刷またはPDF保存してください。</div>`;
+    <tr><td><b>${escapeHtml(isShipping(item) ? t(item.code, "Shipping") : item.code)}</b></td><td>${escapeHtml(isShipping(item) ? t(item.name, "Flat-rate shipping") : item.name)}</td><td class="num" data-label="${t("数量", "Qty")}">${item.qty}</td><td class="num" data-label="${t("単価", "Unit price")}">${yen(item.price)}</td><td class="num"><b>${yen(item.price * item.qty)}</b></td></tr>`).join("");
+  const notesHtml = draft.notes ? `<div class="receiptNote"><b>${t("備考", "Notes")}</b>${escapeHtml(draft.notes).replace(/\n/g, "<br>")}</div>` : "";
+  $("receiptCard").lang = english ? "en" : "ja";
+  $("receiptCard").setAttribute("aria-label", t("展示会注文書", "Exhibition Order Receipt"));
   $("receiptCard").innerHTML = `
     <div class="receiptHeaderSimple">
       <div class="receiptBrandBlock">
-        <img class="receiptBrandLogo" src="${logoUrl}" alt="株式会社サンニシムラ">
-        <div><div class="receiptBrandName">株式会社サンニシムラ</div><div class="receiptBrandSub">SAN NISHIMURA CO., LTD.</div></div>
+        <img class="receiptBrandLogo" src="${logoUrl}" alt="${company}">
+        <div><div class="receiptBrandName">${company}</div>${english ? "" : '<div class="receiptBrandSub">SAN NISHIMURA CO., LTD.</div>'}</div>
       </div>
-      <div class="receiptDocMeta"><div class="receiptDocTitle">展示会 注文書</div><div class="receiptDocSub">Exhibition Order Receipt</div><div class="receiptMetaLine"><b>注文番号</b> ${escapeHtml(orderNumber(draft))}<br><b>作成日時</b> ${escapeHtml(new Date(date).toLocaleString("ja-JP"))}</div></div>
+      <div class="receiptDocMeta"><div class="receiptDocTitle">${t("展示会 注文書", "Exhibition Order Receipt")}</div>${english ? "" : '<div class="receiptDocSub">Exhibition Order Receipt</div>'}<div class="receiptMetaLine"><b>${t("注文番号", "Order No.")}</b> ${escapeHtml(orderNumber(draft))}<br><b>${t("作成日時", "Issued (JST)")}</b> ${escapeHtml(new Date(date).toLocaleString(english ? "en-GB" : "ja-JP", { timeZone: "Asia/Tokyo" }))}</div></div>
     </div>
     <div class="receiptInfoBand">${info.map(([label, value]) => receiptInfo(label, value)).join("")}</div>
-    ${isPickupOrder(draft) ? `<div class="receiptPickupNumber"><span>お渡し番号</span><strong>${escapeHtml(pickupNumber(draft) || "未発行・保存してください")}</strong><small>お受け取り時に、この番号をご提示ください。</small></div>` : ""}
-    <div class="receiptSection"><div class="receiptSectionHead"><div class="receiptSectionTitle">注文明細</div><div class="receiptSectionHint">${totalQuantity(draft.items)}点</div></div>
+    ${isPickupOrder(draft) ? `<div class="receiptPickupNumber"><span>${t("お渡し番号", "Pickup No.")}</span><strong>${escapeHtml(pickupNumber(draft) || t("未発行・保存してください", "Not issued — save the order first"))}</strong><small>${t("お受け取り時に、この番号をご提示ください。", "Please present this number when collecting your order.")}</small></div>` : ""}
+    <div class="receiptSection"><div class="receiptSectionHead"><div class="receiptSectionTitle">${t("注文明細", "Order details")}</div><div class="receiptSectionHint">${totalQuantity(draft.items)}${t("点", " items")}</div></div>
       <table class="receiptTable"><colgroup><col class="code"><col><col class="qty"><col class="unit"><col class="subtotal"></colgroup>
-        <thead><tr><th>品番</th><th>商品名</th><th class="num">数量</th><th class="num">単価</th><th class="num">金額</th></tr></thead>
+        <thead><tr><th>${t("品番", "Item No.")}</th><th>${t("商品名", "Product")}</th><th class="num">${t("数量", "Qty")}</th><th class="num">${t("単価", "Unit price")}</th><th class="num">${t("金額", "Amount")}</th></tr></thead>
         <tbody>${rows}</tbody>
       </table>
     </div>
     <div class="receiptFooterGrid">
       <div class="receiptMemoStack">${notesHtml}</div>
-      <div><div class="receiptSummaryBox"><div class="receiptSummaryRow"><span>点数</span><span>${totalQuantity(draft.items)}</span></div><div class="receiptSummaryRow total"><span>合計</span><span>${yen(totalPrice(draft.items))}</span></div></div><div class="receiptCurrencyNote">通貨：JPY</div></div>
+      <div><div class="receiptSummaryBox"><div class="receiptSummaryRow"><span>${t("点数", "Items")}</span><span>${totalQuantity(draft.items)}</span></div><div class="receiptSummaryRow total"><span>${t("合計", "Total")}</span><span>${yen(totalPrice(draft.items))}</span></div></div><div class="receiptCurrencyNote">${t("通貨：JPY", "Currency: JPY")}</div></div>
     </div>
-    <div class="receiptFooterMini"><span>株式会社サンニシムラ</span><span>注文番号 ${escapeHtml(orderNumber(draft))}</span></div>`;
+    <div class="receiptFooterMini"><span>${company}</span><span>${t("注文番号", "Order No.")} ${escapeHtml(orderNumber(draft))}</span></div>`;
   renderReceiptOperations();
 }
 
