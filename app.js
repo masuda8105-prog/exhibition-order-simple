@@ -925,16 +925,20 @@ function saveLocalDemoDraft(nowIso = new Date().toISOString()) {
   return orderFromRow({ id: state.draft.localId, simple_pickup_number: state.draft.pickupNumber || null, payload: payloadForOrder(state.draft), created_at: state.draft.createdAt || nowIso, updated_at: nowIso });
 }
 
-async function printReceipt() {
+async function printReceipt({ companyOnly = false } = {}) {
   if (isPickupOrder(state.draft) && !pickupNumber(state.draft)) {
     toast("お渡し番号を発行するため「戻って修正」から保存してください。");
     return;
   }
   try {
-    await $("receiptCard").querySelector(".receiptBrandLogo").decode();
+    await Promise.all([...$("receiptCard").querySelectorAll(".receiptBrandLogo")].map(image => image.decode()));
     await document.fonts.ready;
+    document.body.dataset.printCopy = companyOnly ? "company" : "both";
     window.print();
-  } catch { toast("ロゴを読み込めませんでした。通信を確認して再度お試しください。"); }
+  } catch {
+    delete document.body.dataset.printCopy;
+    toast("印刷を開始できませんでした。通信とロゴの読込みを確認して再度お試しください。");
+  }
 }
 
 function receiptInfo(label, value) {
@@ -961,19 +965,25 @@ function receiptHandoffLabel(order) {
 function renderReceipt() {
   const draft = state.draft;
   const date = state.createdAt || new Date();
-  const english = draft.customerRegion === "overseas";
+  $("receiptCard").innerHTML = receiptCopyHtml(draft, date, true) + receiptCopyHtml(draft, date, false);
+  renderReceiptOperations();
+}
+
+function receiptCopyHtml(draft, date, companyCopy) {
+  const english = !companyCopy && draft.customerRegion === "overseas";
   const t = (ja, en) => english ? en : ja;
+  const copyLabel = companyCopy ? "会社控え" : t("お客様控え", "Customer Copy / お客様控え");
+  const handoffOrder = companyCopy ? { ...draft, customerRegion: "domestic" } : draft;
   const company = t("株式会社サンニシムラ", "SAN NISHIMURA CO., LTD.");
   const typeLabel = english ? (draft.type === ORDER_TYPE.NORMAL ? "Standard order" : "On-site sale") : orderLabel(draft);
   const payment = english ? ({ cash: "Cash", credit: "Credit card" })[draft.paymentMethod] || "Not specified" : paymentLabel(draft.paymentMethod);
-  const info = [[t("店舗名", "Company / Store"), draft.store], [t("電話番号", "Phone"), draft.phone], [t("お客様名", "Customer"), draft.customer || "-"], [t("注文区分", "Order type"), typeLabel], [t("卸屋・帳合先", "Distributor / Account"), draft.account || "-"], [t("担当", "Staff"), draft.staff || state.profile?.display_name || "-"], [t("受け渡し", "Pickup / Delivery"), receiptHandoffLabel(draft)]];
+  const info = [[t("店舗名", "Company / Store"), draft.store], [t("電話番号", "Phone"), draft.phone], [t("お客様名", "Customer"), draft.customer || "-"], [t("注文区分", "Order type"), typeLabel], [t("卸屋・帳合先", "Distributor / Account"), draft.account || "-"], [t("担当", "Staff"), draft.staff || state.profile?.display_name || "-"], [t("受け渡し", "Pickup / Delivery"), receiptHandoffLabel(handoffOrder)]];
   if (draft.type === ORDER_TYPE.SPOT) info.push([t("会計方法", "Payment method"), payment]);
   const rows = draft.items.map((item) => `
     <tr><td><b>${escapeHtml(isShipping(item) ? t(item.code, "Shipping") : item.code)}</b></td><td>${escapeHtml(isShipping(item) ? t(item.name, "Flat-rate shipping") : item.name)}</td><td class="num" data-label="${t("数量", "Qty")}">${item.qty}</td><td class="num" data-label="${t("単価", "Unit price")}">${yen(item.price)}</td><td class="num"><b>${yen(item.price * item.qty)}</b></td></tr>`).join("");
   const notesHtml = draft.notes ? `<div class="receiptNote"><b>${t("備考", "Notes")}</b>${escapeHtml(draft.notes).replace(/\n/g, "<br>")}</div>` : "";
-  $("receiptCard").lang = english ? "en" : "ja";
-  $("receiptCard").setAttribute("aria-label", t("展示会注文書", "Exhibition Order Receipt"));
-  $("receiptCard").innerHTML = `
+  return `<article class="receiptSheet receiptCopy" data-copy="${companyCopy ? "company" : "customer"}" lang="${english ? "en" : "ja"}" aria-label="${copyLabel}">
+    <div class="receiptCopyLabel">${copyLabel}</div>
     <div class="receiptHeaderSimple">
       <div class="receiptBrandBlock">
         <img class="receiptBrandLogo" src="${logoUrl}" alt="${company}">
@@ -993,8 +1003,7 @@ function renderReceipt() {
       <div class="receiptMemoStack">${notesHtml}</div>
       <div><div class="receiptSummaryBox"><div class="receiptSummaryRow"><span>${t("点数", "Items")}</span><span>${totalQuantity(draft.items)}</span></div><div class="receiptSummaryRow total"><span>${t("合計", "Total")}</span><span>${yen(totalPrice(draft.items))}</span></div></div><div class="receiptCurrencyNote">${t("通貨：JPY", "Currency: JPY")}</div></div>
     </div>
-    <div class="receiptFooterMini"><span>${company}</span><span>${t("注文番号", "Order No.")} ${escapeHtml(orderNumber(draft))}</span></div>`;
-  renderReceiptOperations();
+    <div class="receiptFooterMini"><span>${company} ／ ${copyLabel}</span><span>${t("注文番号", "Order No.")} ${escapeHtml(orderNumber(draft))}</span></div></article>`;
 }
 
 function renderReceiptOperations() {
@@ -1015,11 +1024,11 @@ function renderReceiptOperations() {
       <div class="confirmationHeading"><h2>${confirmed ? "注文確定済み" : "あと少しで注文完了"}</h2><span class="confirmationStatus ${confirmed ? "done" : ""}">${confirmed ? "確定済み" : "未確定・一時保存"}</span></div>
       <ol class="confirmationSteps">
         <li class="${ready ? "done" : "current"}"><span class="flowNumber">${ready ? "✓" : "1"}</span><div><h3>${isPickupOrder(order) ? "お渡し番号を発行" : "共有用の控えを作成"}</h3>${isPickupOrder(order) ? `<strong class="flowPickup">${escapeHtml(pickupNumber(order) || "未発行")}</strong>` : ""}<p>${ready ? (isPickupOrder(order) ? "一時保存済み。同じ注文を開き直しても番号は変わりません。" : "一時保存済み。下の控えをSlackへの共有に使えます。") : "「戻って修正」から共有用の控えを作成してください。"}</p></div></li>
-        <li class="${order.slackShared ? "done" : ready ? "current" : ""}"><span class="flowNumber">${order.slackShared ? "✓" : "2"}</span><div><h3>Slackに共有</h3><p>下の控えをPDF保存して、いつものSlackへ投稿してください。<br><b>このボタンだけではSlackに送信されません。</b></p><button id="receiptSlackSharedPrint" type="button" class="secondary" ${ready ? "" : "disabled"}>共有用PDFを保存・印刷</button><label class="flowShareCheck" for="receiptSlackShared"><input id="receiptSlackShared" type="checkbox" ${order.slackShared ? "checked" : ""} ${ready ? "" : "disabled"}><span>Slackに共有済み<br><small>投稿できたことを確認してチェック</small></span></label>${order.slackSharedAt ? `<p>共有確認：${escapeHtml(formatDateTime(order.slackSharedAt))}</p>` : ""}</div></li>
+        <li class="${order.slackShared ? "done" : ready ? "current" : ""}"><span class="flowNumber">${order.slackShared ? "✓" : "2"}</span><div><h3>Slackに共有</h3><p>日本語の会社控えをPDF保存して、いつものSlackへ投稿してください。お客様控えは共有用PDFに含めません。<br><b>このボタンだけではSlackに送信されません。</b></p><button id="receiptSlackSharedPrint" type="button" class="secondary" ${ready ? "" : "disabled"}>会社控えをPDF保存（日本語）</button><label class="flowShareCheck" for="receiptSlackShared"><input id="receiptSlackShared" type="checkbox" ${order.slackShared ? "checked" : ""} ${ready ? "" : "disabled"}><span>Slackに共有済み<br><small>投稿できたことを確認してチェック</small></span></label>${order.slackSharedAt ? `<p>共有確認：${escapeHtml(formatDateTime(order.slackSharedAt))}</p>` : ""}</div></li>
         <li class="${confirmed ? "done" : order.slackShared ? "current" : ""}"><span class="flowNumber">${confirmed ? "✓" : "3"}</span><div><h3>注文を確定</h3><p>${confirmed ? (isPickupOrder(order) ? (order.delivered ? "注文確定済み・お渡し完了です。" : "注文確定済み・受け取り待ちです。") : "共有と注文確定が完了しました。") : order.slackShared ? "共有確認済みです。最後に下のボタンを押してください。" : "Slack共有済みにチェックすると、確定できます。"}</p><button id="confirmOrderButton" type="button" class="primary" ${confirmed || confirmationError(order) ? "disabled" : ""}>${confirmed ? "✓ 注文確定済み" : "③ 注文を確定する"}</button></div></li>
       </ol><p id="confirmationError" class="flowError hidden" role="alert"></p>
     </section>`;
-  $("receiptSlackSharedPrint").addEventListener("click", printReceipt);
+  $("receiptSlackSharedPrint").addEventListener("click", () => printReceipt({ companyOnly: true }));
   $("receiptSlackShared").addEventListener("change", async () => {
     if (!ready || state.saving) return;
     await saveReceiptProgress(setSlackShared(state.draft, $("receiptSlackShared").checked), "共有確認を保存しました。最後に「注文を確定する」を押してください。");
@@ -1055,6 +1064,7 @@ async function saveReceiptProgress(next, successMessage) {
 }
 
 function bindStaticEvents() {
+  window.addEventListener("afterprint", () => { delete document.body.dataset.printCopy; });
   $("retryConnection").addEventListener("click", restoreSession);
   $("loginForm").addEventListener("submit", async (event) => {
     event.preventDefault();

@@ -54,14 +54,15 @@
         <div class="eyebrow">PRINT PREVIEW</div>
         <h2>注文書プレビュー</h2>
       </div>
-      <span>A4縦・ブラウザ印刷</span>
+      <span>A4縦・会社控え＋お客様控え</span>
     </div>
     <div id="receiptOperations"></div>
-    <article id="receiptCard" class="receiptSheet" aria-label="展示会注文書"></article>
+    <p class="receiptCopiesNotice">印刷は会社控え・お客様控えの2部です。会社控えは常に日本語で、Slack共有には会社控えをお使いください。</p>
+    <div id="receiptCard" aria-label="会社控えとお客様控え"></div>
     <p id="printPrivacyNotice" class="printPrivacyNotice">この注文は共有注文履歴へ保存済みです。印刷画面を閉じても入力内容は消えません。</p>
     <div id="receiptActions" class="receiptActions">
       <button id="backToEditButton" class="secondary" type="button">戻って修正</button>
-      <button id="printButton" class="primary" type="button">印刷</button>
+      <button id="printButton" class="primary" type="button">2部を印刷</button>
     </div>
     <div id="printedActions" class="printedActions">
       <p>注文内容は保存されています。</p>

@@ -221,6 +221,9 @@ h2 { margin: 0; }
 .receiptBrandName { font-size: 13px; font-weight: 950; letter-spacing: .04em; }
 .receiptBrandSub { margin-top: 3px; color: #667085; font-size: 11px; line-height: 1.45; }
 .receiptMemoStack { display: grid; gap: 7px; }
+.receiptCopiesNotice { width: min(900px, 100%); margin: 0 auto 12px; color: #475467; font-size: 13px; line-height: 1.6; }
+.receiptCopy + .receiptCopy { margin-top: 24px; }
+.receiptCopyLabel { margin-bottom: 12px; padding: 9px 12px; border: 2px solid #111827; color: #111827; font-size: 19px; font-weight: 900; text-align: center; overflow-wrap: anywhere; }
 .confirmationFlow { margin: 0 auto 18px; padding: 18px; width: min(900px, 100%); border: 2px solid #d6a038; border-radius: 18px; background: #fff; }
 .confirmationHeading { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
 .confirmationHeading h2 { margin: 0; font-size: 19px; }
@@ -352,7 +355,10 @@ h2 { margin: 0; }
   html, body { width: 100% !important; min-height: 0 !important; margin: 0 !important; padding: 0 !important; overflow: visible !important; background: #fff !important; }
   body > *:not(#receiptView) { display: none !important; }
   #receiptView { display: block !important; width: 100% !important; min-height: 0 !important; margin: 0 !important; padding: 0 !important; }
-  .receiptToolbar, .receiptActions, .printedActions, .printPrivacyNotice, #receiptOperations { display: none !important; }
+  .receiptToolbar, .receiptActions, .printedActions, .printPrivacyNotice, .receiptCopiesNotice, #receiptOperations { display: none !important; }
+  .receiptCopy + .receiptCopy { break-before: page !important; page-break-before: always !important; margin-top: 0 !important; }
+  body[data-print-copy="company"] .receiptCopy[data-copy="customer"] { display: none !important; }
+  .receiptCopyLabel { margin-bottom: 7px !important; padding: 5px 8px !important; font-size: 13px !important; break-after: avoid !important; }
   .receiptSheet { width: 100% !important; max-width: none !important; min-height: 0 !important; margin: 0 !important; padding: 0 !important; border: 0 !important; border-radius: 0 !important; box-shadow: none !important; }
   .receiptHeaderSimple { grid-template-columns: minmax(0, 1fr) 230px !important; gap: 9px !important; padding-bottom: 7px !important; }
   .receiptBrandBlock { display: flex !important; align-items: center !important; gap: 12px !important; }
