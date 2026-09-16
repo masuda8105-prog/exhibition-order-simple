@@ -27,9 +27,20 @@ test('添付写真は注文のクラウドpayloadへ含めず、通常印刷か�
 
 test('添付は見出しを含めA4の1ページ内に収め、写真を切り取らない', () => {
   const css=readFileSync(new URL('../styles.css',import.meta.url),'utf8');
-  assert.match(css, /\.shareAttachmentPage \{[^}]*grid-template-rows: 12mm 8mm minmax\(0, 1fr\)[^}]*height: 270mm[^}]*page-break-inside: avoid !important/);
-  assert.match(css, /\.shareAttachmentPage img \{[^}]*height: 100%[^}]*min-height: 0[^}]*object-fit: contain/);
-  assert.ok(270 < 297 - 8 * 2);
+  const pageRule=css.match(/\.shareAttachmentPage \{([^}]+)\}/)[1];
+  const imageRule=css.match(/\.shareAttachmentPage img \{([^}]+)\}/)[1];
+  assert.match(pageRule, /display: block !important/);
+  assert.match(pageRule, /position: relative !important/);
+  assert.match(pageRule, /height: 250mm !important/);
+  assert.match(pageRule, /page-break-inside: avoid !important/);
+  assert.match(imageRule, /position: absolute !important/);
+  assert.match(imageRule, /top: 20mm !important/);
+  assert.match(imageRule, /height: 230mm !important/);
+  assert.match(imageRule, /object-fit: contain !important/);
+  assert.ok(!pageRule.includes('grid'));
+  assert.ok(!imageRule.includes('height: 100%'));
+  assert.equal(20 + 230,250);
+  assert.ok(250 < 297 - 8 * 2);
   assert.match(css, /@media screen \{[^}]*\.slackWorkflow #receiptCard,[^}]*\.slackWorkflow #printButton \{ display: none; \}/);
   assert.match(css, /#receiptCard \{ display: block !important; \}/);
 });
