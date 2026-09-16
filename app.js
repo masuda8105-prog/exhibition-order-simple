@@ -1,6 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import logoUrl from "./assets/sun_nishimura_logo.jpg";
 import { clearOrderData } from "./order-privacy.js";
+import { MAX_PHOTOS, createAttachmentStore, preparePhoto } from "./order-attachments.js";
 import {
   SYNC_EVENT_NAME,
   orderFromRow,
@@ -34,6 +35,8 @@ import {
 } from "./order-domain.js";
 
 const $ = (id) => document.getElementById(id);
+const attachmentStore = createAttachmentStore();
+let attachmentBusy = false;
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL?.trim();
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY?.trim();
 const isLocalDemo = ["127.0.0.1", "localhost"].includes(location.hostname)
@@ -482,6 +485,7 @@ function freshDraft() {
 }
 
 function clearCurrentOrder() {
+  attachmentStore.clear();
   clearOrderData(state, [$("sheetBody"), $("receiptCard"), $("receiptOperations"), $("sheetError")]);
 }
 
@@ -926,12 +930,14 @@ function saveLocalDemoDraft(nowIso = new Date().toISOString()) {
 }
 
 async function printReceipt({ companyOnly = false } = {}) {
+  if (attachmentBusy) return toast("写真の読込みが終わるまでお待ちください。");
   if (isPickupOrder(state.draft) && !pickupNumber(state.draft)) {
     toast("お渡し番号を発行するため「戻って修正」から保存してください。");
     return;
   }
   try {
     await Promise.all([...$("receiptCard").querySelectorAll(".receiptBrandLogo")].map(image => image.decode()));
+    if (companyOnly) await Promise.all([...$("receiptCard").querySelectorAll(".shareAttachmentPage img")].map(image => image.decode()));
     await document.fonts.ready;
     document.body.dataset.printCopy = companyOnly ? "company" : "both";
     window.print();
@@ -965,7 +971,7 @@ function receiptHandoffLabel(order) {
 function renderReceipt() {
   const draft = state.draft;
   const date = state.createdAt || new Date();
-  $("receiptCard").innerHTML = receiptCopyHtml(draft, date, true) + receiptCopyHtml(draft, date, false);
+  $("receiptCard").innerHTML = receiptCopyHtml(draft, date, true) + receiptCopyHtml(draft, date, false) + attachmentPagesHtml(draft);
   renderReceiptOperations();
 }
 
@@ -1029,6 +1035,10 @@ function renderReceiptOperations() {
       </ol><p id="confirmationError" class="flowError hidden" role="alert"></p>
     </section>`;
   $("receiptSlackSharedPrint").addEventListener("click", () => printReceipt({ companyOnly: true }));
+  $("receiptSlackSharedPrint").insertAdjacentHTML("beforebegin", attachmentPickerHtml(order, ready));
+  const photoCount = attachmentStore.list(order.localId).length;
+  if (photoCount) $("receiptSlackSharedPrint").textContent = `会社控え＋写真${photoCount}枚をPDF保存`;
+  bindAttachmentPicker(order);
   $("receiptSlackShared").addEventListener("change", async () => {
     if (!ready || state.saving) return;
     await saveReceiptProgress(setSlackShared(state.draft, $("receiptSlackShared").checked), "共有確認を保存しました。最後に「注文を確定する」を押してください。");
@@ -1039,6 +1049,59 @@ function renderReceiptOperations() {
     if (error) return toast(error);
     await saveReceiptProgress(confirmOrder(state.draft), "注文を確定しました。");
   });
+}
+
+function attachmentPickerHtml(order, ready) {
+  const photos = attachmentStore.list(order.localId);
+  const locked = !ready || order.slackShared || attachmentBusy;
+  return `<div class="attachmentPicker"><h4>別紙・写真を添付（任意）</h4><p>ホテル送りの記入用紙などを追加できます。会社控えPDFの後ろに写真を1枚ずつ付けます。通常の2部印刷には含めません。</p>
+    <div class="attachmentButtons"><button id="choosePhotos" type="button" class="secondary" ${locked || photos.length >= MAX_PHOTOS ? "disabled" : ""}>写真フォルダから選ぶ</button><button id="takePhoto" type="button" class="secondary" ${locked || photos.length >= MAX_PHOTOS ? "disabled" : ""}>カメラで撮影</button></div>
+    <input id="photoFiles" type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif" multiple hidden>
+    <input id="cameraPhoto" type="file" accept="image/*" capture="environment" hidden>
+    <p>最大${MAX_PHOTOS}枚・1枚20MBまで。写真はこの端末内のみです。再読み込み・ログアウト・新しい注文で消えるため、先にPDF保存・共有してください。</p>
+    ${order.slackShared ? '<p>写真を変更する場合は、先に「Slackに共有済み」のチェックを外してください。</p>' : ""}
+    <div class="attachmentList">${photos.map((photo, index) => `<div class="attachmentItem"><details><summary><img src="${photo.url}" alt="添付写真 ${index + 1}"><span>写真${index + 1}を大きく確認</span></summary><img class="attachmentLarge" src="${photo.url}" alt="${escapeHtml(photo.name)}"></details><button type="button" class="secondary" data-remove-photo="${photo.id}" ${locked ? "disabled" : ""}>写真${index + 1}を削除</button></div>`).join("")}</div>
+    <p id="attachmentStatus" role="status">${photos.length}枚添付済み</p></div>`;
+}
+
+function attachmentPagesHtml(order) {
+  return `<div class="shareAttachmentPages">${attachmentStore.list(order.localId).map((photo, index) => `<section class="shareAttachmentPage"><div class="receiptCopyLabel">会社控え・添付資料 ${index + 1}</div><p>注文番号 ${escapeHtml(orderNumber(order))}${pickupNumber(order) ? ` ／ お渡し番号 ${escapeHtml(pickupNumber(order))}` : ""}</p><img src="${photo.url}" alt="添付資料 ${index + 1}"></section>`).join("")}</div>`;
+}
+
+function bindAttachmentPicker(order) {
+  $("choosePhotos").addEventListener("click", () => $("photoFiles").click());
+  $("takePhoto").addEventListener("click", () => $("cameraPhoto").click());
+  for (const id of ["photoFiles", "cameraPhoto"]) $(id).addEventListener("change", async event => {
+    const files = [...event.target.files];
+    event.target.value = "";
+    if (!files.length || attachmentBusy || state.draft?.localId !== order.localId || state.draft.slackShared) return;
+    attachmentBusy = true;
+    const generation = attachmentStore.generation;
+    const controls = [...document.querySelectorAll("#receiptView button,#receiptView input")].map(control => [control,control.disabled]);
+    controls.forEach(([control]) => { control.disabled = true; });
+    $("attachmentStatus").textContent = "写真を読み込んでいます…";
+    const errors = [];
+    try {
+      for (const file of files) {
+        if (attachmentStore.generation !== generation) break;
+        if (attachmentStore.list(order.localId).length >= MAX_PHOTOS) { errors.push(`最大${MAX_PHOTOS}枚までです。残りの写真は追加していません。`); break; }
+        try { attachmentStore.add(order.localId, await preparePhoto(file), generation); }
+        catch (error) { errors.push(`${file.name}: ${error.message}`); }
+      }
+    } finally {
+      attachmentBusy = false;
+      controls.forEach(([control,disabled]) => { control.disabled = disabled; });
+      if (state.draft?.localId === order.localId) {
+        renderReceipt();
+        $("attachmentStatus").textContent = `${attachmentStore.list(order.localId).length}枚添付済み。${errors.join(" ") || "写真を開いて文字が読めるか確認してください。"}`;
+      }
+    }
+  });
+  document.querySelectorAll("[data-remove-photo]").forEach(button => button.addEventListener("click", () => {
+    if (state.draft?.localId !== order.localId || state.draft.slackShared || attachmentBusy) return;
+    attachmentStore.remove(order.localId,button.dataset.removePhoto);
+    renderReceipt();
+  }));
 }
 
 async function saveReceiptProgress(next, successMessage) {

@@ -48,6 +48,7 @@ test("控えに現金・クレジットを表示し、ご案内定型文は出�
       receiptHandoffLabel: () => "その場渡し", receiptInfo: (label, value) => `${label}:${value}`,
       escapeHtml: (value) => String(value ?? ""), yen: (value) => `¥${value}`, logoUrl: "test.jpg",
       renderReceiptOperations: () => {},
+      attachmentPagesHtml: () => "",
     });
     render();
     assert.ok(card.innerHTML.includes(`会計方法:${expected}`));
@@ -114,14 +115,14 @@ test("通常は2部、Slack用は会社控えだけを印刷し、両方のロ�
   const document = { body: { dataset: {} }, fonts: { ready: Promise.resolve() } };
   const state = { draft: { type: 'spot', handoff: 'later', pickupNumber: '3' } };
   const print = runInNewContext(`async ${appFunction('printReceipt')}; printReceipt`, {
-    ...domain, state, document,
-    $: () => ({ querySelectorAll: () => [1,2].map(() => ({decode:async () => { decoded++; }})) }),
+    ...domain, state, document, attachmentBusy: false,
+    $: () => ({ querySelectorAll: selector => (selector.includes('Logo') ? [1,2] : [1]).map(() => ({decode:async () => { decoded++; }})) }),
     window: {print: () => modes.push(document.body.dataset.printCopy)}, toast: () => {},
   });
   await print({companyOnly:true});
   await print();
   assert.deepEqual(modes,['company','both']);
-  assert.equal(decoded,4);
+  assert.equal(decoded,5);
   state.draft.pickupNumber = '';
   await print();
   assert.equal(modes.length,2);
