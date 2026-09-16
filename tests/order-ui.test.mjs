@@ -109,7 +109,7 @@ test("全注文区分で会社控えを先に出し、両控えで番号・金�
   assert.match(css,/\.receiptCopy \+ \.receiptCopy \{ break-before: page !important/);
 });
 
-test("通常は2部、Slack用は会社控えだけを印刷し、両方のロゴを待つ", async () => {
+test("通常は2部、Slack用は2部と添付写真を印刷し、画像の読込みを待つ", async () => {
   const modes = [];
   let decoded = 0;
   const document = { body: { dataset: {} }, fonts: { ready: Promise.resolve() } };
@@ -119,9 +119,9 @@ test("通常は2部、Slack用は会社控えだけを印刷し、両方のロ�
     $: () => ({ querySelectorAll: selector => (selector.includes('Logo') ? [1,2] : [1]).map(() => ({decode:async () => { decoded++; }})) }),
     window: {print: () => modes.push(document.body.dataset.printCopy)}, toast: () => {},
   });
-  await print({companyOnly:true});
+  await print({sharing:true});
   await print();
-  assert.deepEqual(modes,['company','both']);
+  assert.deepEqual(modes,['sharing','both']);
   assert.equal(decoded,5);
   state.draft.pickupNumber = '';
   await print();

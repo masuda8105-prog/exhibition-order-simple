@@ -360,6 +360,15 @@ h2 { margin: 0; }
   .qty button { width: 32px; }
 }
 
+@media screen {
+  .slackWorkflow .receiptToolbar,
+  .slackWorkflow #receiptCard,
+  .slackWorkflow .receiptCopiesNotice,
+  .slackWorkflow .printPrivacyNotice,
+  .slackWorkflow #printButton { display: none; }
+  .slackWorkflow .receiptActions { grid-template-columns: 1fr; }
+}
+
 @page { size: A4 portrait; margin: 8mm; }
 
 @media print {
@@ -368,11 +377,14 @@ h2 { margin: 0; }
   #receiptView { display: block !important; width: 100% !important; min-height: 0 !important; margin: 0 !important; padding: 0 !important; }
   .receiptToolbar, .receiptActions, .printedActions, .printPrivacyNotice, .receiptCopiesNotice, #receiptOperations { display: none !important; }
   .receiptCopy + .receiptCopy { break-before: page !important; page-break-before: always !important; margin-top: 0 !important; }
-  body[data-print-copy="company"] .receiptCopy[data-copy="customer"] { display: none !important; }
-  body[data-print-copy="company"] .shareAttachmentPages { display: block !important; }
-  .shareAttachmentPage { break-before: page !important; page-break-before: always !important; break-inside: avoid; }
-  .shareAttachmentPage p { margin: 0 0 5mm; font-size: 10px; }
-  .shareAttachmentPage img { display: block; width: 100%; height: 245mm; object-fit: contain; }
+  #receiptCard { display: block !important; }
+  body[data-print-copy="sharing"] .shareAttachmentPages { display: block !important; }
+  /* A4 content height is 281mm. Keep header + image within one 270mm page,
+     including a safety margin for printer rounding. Never crop the photograph. */
+  .shareAttachmentPage { display: grid; grid-template-rows: 12mm 8mm minmax(0, 1fr); width: 100%; height: 270mm; min-height: 0; margin: 0; padding: 0; box-sizing: border-box; break-before: page !important; page-break-before: always !important; break-inside: avoid !important; page-break-inside: avoid !important; }
+  .shareAttachmentPage .receiptCopyLabel { margin: 0 !important; align-self: start; }
+  .shareAttachmentPage p { margin: 0; font-size: 10px; line-height: 1.3; }
+  .shareAttachmentPage img { display: block; width: 100%; height: 100%; min-height: 0; max-height: 250mm; object-fit: contain; }
   .receiptCopyLabel { margin-bottom: 7px !important; padding: 5px 8px !important; font-size: 13px !important; break-after: avoid !important; }
   .receiptSheet { width: 100% !important; max-width: none !important; min-height: 0 !important; margin: 0 !important; padding: 0 !important; border: 0 !important; border-radius: 0 !important; box-shadow: none !important; }
   .receiptHeaderSimple { grid-template-columns: minmax(0, 1fr) 230px !important; gap: 9px !important; padding-bottom: 7px !important; }

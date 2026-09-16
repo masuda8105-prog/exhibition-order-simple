@@ -19,9 +19,19 @@ test('添付写真は注文のクラウドpayloadへ含めず、通常印刷か�
   assert.ok(!JSON.stringify(payload).includes('private-photo'));
   const css=readFileSync(new URL('../styles.css',import.meta.url),'utf8');
   assert.ok(css.includes('.shareAttachmentPages { display: none; }'));
-  assert.ok(css.includes('body[data-print-copy="company"] .shareAttachmentPages { display: block !important; }'));
+  assert.ok(css.includes('body[data-print-copy="sharing"] .shareAttachmentPages { display: block !important; }'));
+  assert.ok(!css.includes('.receiptCopy[data-copy="customer"] { display: none'));
   const source=readFileSync(new URL('../app.js',import.meta.url),'utf8');
   assert.ok(source.includes('capture="environment"'));
+});
+
+test('添付は見出しを含めA4の1ページ内に収め、写真を切り取らない', () => {
+  const css=readFileSync(new URL('../styles.css',import.meta.url),'utf8');
+  assert.match(css, /\.shareAttachmentPage \{[^}]*grid-template-rows: 12mm 8mm minmax\(0, 1fr\)[^}]*height: 270mm[^}]*page-break-inside: avoid !important/);
+  assert.match(css, /\.shareAttachmentPage img \{[^}]*height: 100%[^}]*min-height: 0[^}]*object-fit: contain/);
+  assert.ok(270 < 297 - 8 * 2);
+  assert.match(css, /@media screen \{[^}]*\.slackWorkflow #receiptCard,[^}]*\.slackWorkflow #printButton \{ display: none; \}/);
+  assert.match(css, /#receiptCard \{ display: block !important; \}/);
 });
 
 test('写真を注文ごとに分離し、枚数超過・削除・終了時にURLを解放する', () => {
