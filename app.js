@@ -1030,6 +1030,9 @@ function receiptCopyHtml(draft, date, companyCopy) {
 
 function renderReceiptOperations() {
   const panel = $("receiptOperations");
+  // Keep the generated PDF and its share handler when the checklist redraws.
+  const pdfOutput = $("pdfOutput");
+  panel.after(pdfOutput);
   const order = state.draft;
   const required = needsSlackShare(order);
   $("receiptView").classList.toggle("slackWorkflow", required);
@@ -1047,11 +1050,12 @@ function renderReceiptOperations() {
       <div class="confirmationHeading"><h2>${confirmed ? "注文確定済み" : "あと少しで注文完了"}</h2><span class="confirmationStatus ${confirmed ? "done" : ""}">${confirmed ? "確定済み" : "未確定・一時保存"}</span></div>
       <ol class="confirmationSteps">
 <li class="${ready ? "done" : "current"}"><span class="flowNumber">${ready ? "✓" : "1"}</span><div><h3>${isPickupOrder(order) ? "お渡し番号を発行" : "共有用の控えを作成"}</h3>${isPickupOrder(order) ? `<strong class="flowPickup">${escapeHtml(pickupNumber(order) || "未発行")}</strong>` : ""}<p>${ready ? (isPickupOrder(order) ? "一時保存済み。同じ注文を開き直しても番号は変わりません。" : "一時保存済み。共有用PDFを作成できます。") : "「戻って修正」から共有用の控えを作成してください。"}</p></div></li>
-        <li class="${order.slackShared ? "done" : ready ? "current" : ""}"><span class="flowNumber">${order.slackShared ? "✓" : "2"}</span><div><h3>Slackに共有</h3><p>会社控え・お客様控え・添付写真を1つのPDFにまとめます。PDF保存してSlackへ投稿し、パソコンで開いて印刷してください。会社控えは常に日本語です。<br><b>このボタンだけではSlackに送信されません。</b></p><button id="receiptSlackSharedPrint" type="button" class="secondary" ${ready ? "" : "disabled"}>Slackへの共有（印刷）</button><label class="flowShareCheck" for="receiptSlackShared"><input id="receiptSlackShared" type="checkbox" ${order.slackShared ? "checked" : ""} ${ready ? "" : "disabled"}><span>Slackに共有済み<br><small>投稿できたことを確認してチェック</small></span></label>${order.slackSharedAt ? `<p>共有確認：${escapeHtml(formatDateTime(order.slackSharedAt))}</p>` : ""}</div></li>
+<li class="${order.slackShared ? "done" : ready ? "current" : ""}"><span class="flowNumber">${order.slackShared ? "✓" : "2"}</span><div><h3>Slackに共有</h3><p>会社控え・お客様控え・添付写真を1つのPDFにまとめます。PDFを作成したら、下に表示される「PDFを共有」からSlackへ投稿してください。会社控えは常に日本語です。</p><button id="receiptSlackSharedPrint" type="button" class="secondary" ${ready ? "" : "disabled"}>PDFを作成する</button><label class="flowShareCheck" for="receiptSlackShared"><input id="receiptSlackShared" type="checkbox" ${order.slackShared ? "checked" : ""} ${ready ? "" : "disabled"}><span>Slackに共有済み<br><small>投稿できたことを確認してチェック</small></span></label>${order.slackSharedAt ? `<p>共有確認：${escapeHtml(formatDateTime(order.slackSharedAt))}</p>` : ""}</div></li>
         <li class="${confirmed ? "done" : order.slackShared ? "current" : ""}"><span class="flowNumber">${confirmed ? "✓" : "3"}</span><div><h3>注文を確定</h3><p>${confirmed ? (isPickupOrder(order) ? (order.delivered ? "注文確定済み・お渡し完了です。" : "注文確定済み・受け取り待ちです。") : "共有と注文確定が完了しました。") : order.slackShared ? "共有確認済みです。最後に下のボタンを押してください。" : "Slack共有済みにチェックすると、確定できます。"}</p><button id="confirmOrderButton" type="button" class="primary" ${confirmed || confirmationError(order) ? "disabled" : ""}>${confirmed ? "✓ 注文確定済み" : "③ 注文を確定する"}</button></div></li>
       </ol><p id="confirmationError" class="flowError hidden" role="alert"></p>
     </section>`;
   $("receiptSlackSharedPrint").addEventListener("click", () => printReceipt({ sharing: true }));
+  $("receiptSlackSharedPrint").after(pdfOutput);
   $("receiptSlackSharedPrint").insertAdjacentHTML("beforebegin", attachmentPickerHtml(order, ready));
   bindAttachmentPicker(order);
   $("receiptSlackShared").addEventListener("change", async () => {
