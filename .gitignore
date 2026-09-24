@@ -15,6 +15,7 @@ private-data/
 imports/
 orders/
 exports/
+tmp-pdf-check/
 
 # Local Supabase state.
 supabase/.branches/
