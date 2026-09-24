@@ -86,22 +86,24 @@ export function offerOrderPdf({ blob, pages }, filename) {
   generatedUrl=URL.createObjectURL(blob);
   const panel=document.getElementById("pdfOutput");
   const message=document.createElement("p");
-  message.textContent=`PDFを作成しました（${pages}ページ）。PDFを開き、共有メニューから印刷できます。`;
-  const open=document.createElement("a");
-  open.href=generatedUrl; open.target="_blank"; open.rel="noopener";
-  open.className="primary"; open.textContent="PDFを開く・印刷";
-  const save=document.createElement("a");
-  save.href=generatedUrl; save.download=filename; save.className="secondary"; save.textContent="PDFを保存";
-  panel.append(message,open,save);
+  message.textContent=`PDFを作成しました（${pages}ページ）。`;
+  panel.append(message);
   const file=new File([blob],filename,{type:"application/pdf"});
-  if (navigator.canShare?.({files:[file]})) {
-    const share=document.createElement("button");
-    share.type="button"; share.className="primary"; share.textContent="PDFを共有（Slackなど）";
-    share.onclick=async()=>{
-      try { await navigator.share({files:[file]}); }
-      catch(error) { if(error.name!=="AbortError") message.textContent="共有できませんでした。「PDFを保存」から保存して投稿してください。"; }
-    };
-    panel.append(share);
-  }
+  const share=document.createElement("button");
+  share.type="button"; share.className="primary"; share.textContent="PDFを共有";
+  share.onclick=async()=>{
+    if (!navigator.canShare?.({files:[file]})) {
+      const download=document.createElement("a");
+      download.href=generatedUrl; download.download=filename;
+      panel.append(download); download.click(); download.remove();
+      message.textContent="この端末では直接共有に対応していないため、PDFを保存します。保存したPDFをSlackなどへ添付してください。";
+      return;
+    }
+    share.disabled=true;
+    try { await navigator.share({files:[file]}); }
+    catch(error) { if(error.name!=="AbortError") message.textContent="共有できませんでした。もう一度「PDFを共有」を押してください。"; }
+    finally { share.disabled=false; }
+  };
+  panel.append(share);
   panel.scrollIntoView({block:"center",behavior:"smooth"});
 }
