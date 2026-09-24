@@ -31,10 +31,10 @@ test('添付は見出しを含めA4の1ページ内に収め、写真を切り�
   const imageRule=css.match(/\.shareAttachmentPage img \{([^}]+)\}/)[1];
   assert.match(pageRule, /display: block !important/);
   assert.match(pageRule, /position: relative !important/);
-  assert.match(pageRule, /height: 220mm !important/);
+  assert.match(pageRule, /height: 200mm !important/);
   assert.match(pageRule, /overflow: hidden !important/);
   assert.match(pageRule, /page-break-inside: avoid !important/);
-  assert.match(pageRule, /page-break-after: always !important/);
+  assert.match(pageRule, /page-break-after: auto !important/);
   assert.match(imageRule, /position: absolute !important/);
   assert.match(imageRule, /top: 20mm !important/);
   assert.match(imageRule, /height: 180mm !important/);
@@ -42,7 +42,7 @@ test('添付は見出しを含めA4の1ページ内に収め、写真を切り�
   assert.ok(!pageRule.includes('grid'));
   assert.ok(!imageRule.includes('height: 100%'));
   assert.equal(20 + 180,200);
-  assert.ok(220 < 297 - 8 * 2);
+  assert.ok(200 < 297 - 8 * 2);
   assert.match(css, /@media screen \{[^}]*\.slackWorkflow #receiptCard,[^}]*\.slackWorkflow #printButton \{ display: none; \}/);
   assert.match(css, /#receiptCard \{ display: block !important; \}/);
 });
