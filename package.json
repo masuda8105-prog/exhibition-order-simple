@@ -18,7 +18,9 @@
     "production:snapshot": "node scripts/production-snapshot.mjs"
   },
   "dependencies": {
-    "@supabase/supabase-js": "2.112.4"
+    "@supabase/supabase-js": "2.112.4",
+    "html2canvas": "1.4.1",
+    "jspdf": "4.2.1"
   },
   "devDependencies": {
     "dotenv": "17.4.2",

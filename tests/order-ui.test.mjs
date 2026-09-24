@@ -47,7 +47,7 @@ test("控えに現金・クレジットを表示し、ご案内定型文は出�
       ...domain, state, $: () => card, orderLabel: () => "現売り", orderNumber: () => "TEST",
       receiptHandoffLabel: () => "その場渡し", receiptInfo: (label, value) => `${label}:${value}`,
       escapeHtml: (value) => String(value ?? ""), yen: (value) => `¥${value}`, logoUrl: "test.jpg",
-      renderReceiptOperations: () => {},
+      renderReceiptOperations: () => {}, clearGeneratedPdf: () => {},
       attachmentPagesHtml: () => "",
     });
     render();
@@ -112,12 +112,13 @@ test("全注文区分で会社控えを先に出し、両控えで番号・金�
 test("通常は2部、Slack用は2部と添付写真を印刷し、画像の読込みを待つ", async () => {
   const modes = [];
   let decoded = 0;
-  const document = { body: { dataset: {} }, fonts: { ready: Promise.resolve() } };
+  const document = { body: { dataset: {} }, fonts: { ready: Promise.resolve() }, querySelectorAll: () => [] };
   const state = { draft: { type: 'spot', handoff: 'later', pickupNumber: '3' } };
   const print = runInNewContext(`async ${appFunction('printReceipt')}; printReceipt`, {
     ...domain, state, document, attachmentBusy: false,
     $: () => ({ querySelectorAll: selector => (selector.includes('Logo') ? [1,2] : [1]).map(() => ({decode:async () => { decoded++; }})) }),
-    window: {print: () => modes.push(document.body.dataset.printCopy)}, toast: () => {},
+    createOrderPdf: async (_card, sharing) => { modes.push(sharing ? 'sharing' : 'both'); return {blob:{},pages:2}; },
+    offerOrderPdf: () => {}, orderNumber: () => 'TEST', toast: () => {},
   });
   await print({sharing:true});
   await print();

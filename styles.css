@@ -232,6 +232,11 @@ h2 { margin: 0; }
 .attachmentItem button { margin-top: 8px; }
 #attachmentStatus { overflow-wrap: anywhere; }
 .shareAttachmentPages { display: none; }
+.pdfOutput:empty { display: none; }
+.pdfOutput { width: min(900px,100%); margin: 12px auto; padding: 16px; background: #fff; border: 1px solid #d1d5db; border-radius: 12px; display: flex; flex-wrap: wrap; gap: 10px; }
+.pdfOutput p { flex-basis: 100%; margin: 0; }
+.pdfOutput a { display: inline-flex; align-items: center; justify-content: center; text-decoration: none; }
+@media print { .pdfOutput { display: none !important; } }
 .receiptCopiesNotice { width: min(900px, 100%); margin: 0 auto 12px; color: #475467; font-size: 13px; line-height: 1.6; }
 .receiptCopy + .receiptCopy { margin-top: 24px; }
 .receiptCopyLabel { margin-bottom: 12px; padding: 9px 12px; border: 2px solid #111827; color: #111827; font-size: 19px; font-weight: 900; text-align: center; overflow-wrap: anywhere; }

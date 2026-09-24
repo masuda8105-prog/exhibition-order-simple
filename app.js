@@ -1,6 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import logoUrl from "./assets/sun_nishimura_logo.jpg";
 import { clearOrderData } from "./order-privacy.js";
+import { clearGeneratedPdf, createOrderPdf, offerOrderPdf } from "./order-pdf.js";
 import { MAX_PHOTOS, createAttachmentStore, preparePhoto } from "./order-attachments.js";
 import {
   SYNC_EVENT_NAME,
@@ -485,6 +486,7 @@ function freshDraft() {
 }
 
 function clearCurrentOrder() {
+  clearGeneratedPdf();
   attachmentStore.clear();
   clearOrderData(state, [$("sheetBody"), $("receiptCard"), $("receiptOperations"), $("sheetError")]);
 }
@@ -930,20 +932,33 @@ function saveLocalDemoDraft(nowIso = new Date().toISOString()) {
 }
 
 async function printReceipt({ sharing = false } = {}) {
+  if (printReceipt.busy) return;
   if (attachmentBusy) return toast("写真の読込みが終わるまでお待ちください。");
   if (isPickupOrder(state.draft) && !pickupNumber(state.draft)) {
     toast("お渡し番号を発行するため「戻って修正」から保存してください。");
     return;
   }
+  printReceipt.busy = true;
+  const draft = state.draft;
+  const controls = [...document.querySelectorAll("#receiptView button,#receiptView input")].map(control => [control, control.disabled]);
+  controls.forEach(([control]) => { control.disabled = true; });
   try {
     await Promise.all([...$("receiptCard").querySelectorAll(".receiptBrandLogo")].map(image => image.decode()));
     if (sharing) await Promise.all([...$("receiptCard").querySelectorAll(".shareAttachmentPage img")].map(image => image.decode()));
     await document.fonts.ready;
-    document.body.dataset.printCopy = sharing ? "sharing" : "both";
-    window.print();
-  } catch {
+    toast("PDFを作成しています…");
+    const result = await createOrderPdf($("receiptCard"), sharing);
+    if (state.draft === draft) {
+      offerOrderPdf(result, `注文書_${orderNumber(draft)}.pdf`);
+      toast("PDFを作成しました。");
+    }
+  } catch (error) {
+    console.error("PDF作成エラー", error.message);
     delete document.body.dataset.printCopy;
-    toast("印刷を開始できませんでした。通信とロゴの読込みを確認して再度お試しください。");
+    toast("PDFを作成できませんでした。写真の枚数や通信を確認して再度お試しください。");
+  } finally {
+    printReceipt.busy = false;
+    controls.forEach(([control, disabled]) => { control.disabled = disabled; });
   }
 }
 
@@ -969,6 +984,7 @@ function receiptHandoffLabel(order) {
 }
 
 function renderReceipt() {
+  clearGeneratedPdf();
   const draft = state.draft;
   const date = state.createdAt || new Date();
   $("receiptCard").innerHTML = receiptCopyHtml(draft, date, true) + receiptCopyHtml(draft, date, false) + attachmentPagesHtml(draft);
