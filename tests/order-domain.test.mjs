@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { HANDOFF, ORDER_TYPE, compactKey, syntaxKey, validateDraft, withShipping, totalPrice, totalQuantity } from "../order-domain.js";
+import { HANDOFF, ORDER_TYPE, compactKey, syntaxKey, validateDraft, withShipping, totalPrice, totalQuantity, taxAmount, taxIncludedTotal } from "../order-domain.js";
 
 test("品番表記を同じ検索キーへ正規化する", () => {
   assert.equal(syntaxKey("Ｎｏ．１０５３"), "1053");
@@ -23,13 +23,16 @@ test("ホテル配送はホテル名・宿泊者名を空欄で保存できる",
   assert.equal(validateDraft(draft), "");
 });
 
-test("送料は何度追加しても500円一回だけで、商品点数に含めない", () => {
+test("送料は何度追加しても税抜600円一回だけで、商品点数に含めない", () => {
   const products = [{ code: "TEST", name: "テスト商品", price: 1000, qty: 2 }];
   const items = withShipping(withShipping(products));
   assert.equal(items.length, 2);
-  assert.equal(totalPrice(items), 2500);
+  assert.equal(totalPrice(items), 2600);
+  assert.equal(taxAmount(items), 260);
+  assert.equal(taxIncludedTotal(items), 2860);
   assert.equal(totalQuantity(items), 2);
   assert.equal(products.length, 1);
   assert.equal(validateDraft({ items: withShipping([]) }), "商品を1点以上追加してください。");
   assert.equal(totalPrice(items.filter((item) => item.code !== "送料")), 2000);
+  assert.equal(taxAmount([{ price: 1001, qty: 1 }]), 100);
 });

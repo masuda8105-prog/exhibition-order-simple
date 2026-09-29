@@ -39,7 +39,7 @@ test("注文番号は既存データを書き換えず短縮し、再表示し�
 test("送料は共有保存から復元しても金額・点数が変わらない", () => {
   const order = { items: withShipping([{ code: "TEST", name: "テスト商品", price: 1000, qty: 2 }]) };
   const restored = orderFromRow({ id: "test-id", payload: payloadForOrder(order) });
-  assert.equal(totalPrice(restored.items), 2500);
+  assert.equal(totalPrice(restored.items), 2600);
   assert.equal(totalQuantity(restored.items), 2);
-  assert.equal(totalPrice(withShipping(restored.items)), 2500);
+  assert.equal(totalPrice(withShipping(restored.items)), 2600);
 });

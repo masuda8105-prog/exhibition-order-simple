@@ -26,11 +26,14 @@ import {
   setSlackShared,
   pickupNumber,
   isShipping,
+  SHIPPING_PRICE,
   withShipping,
   compactKey,
   phoneHasUnexpectedCharacters,
   syntaxKey,
   totalPrice,
+  taxAmount,
+  taxIncludedTotal,
   totalQuantity,
   validateDraft,
 } from "./order-domain.js";
@@ -746,16 +749,16 @@ function bindProductKeypad() {
     const values = draft.keypadMode === "alpha" ? alpha : numeric;
     wrap.className = `productKeypad ${draft.keypadMode === "alpha" ? "alphaKeys" : "numberKeys"}`;
     wrap.innerHTML = values.map((key) => `<button type="button" class="keypadKey" data-key="${escapeHtml(key)}">${escapeHtml(key)}</button>`).join("")
-      + '<div class="keypadUtility"><button type="button" class="keypadKey" data-key="mode">数字／英字</button><button type="button" class="keypadKey" data-key="clear">クリア</button><button type="button" class="keypadKey addKey" data-key="add">追加</button></div><button type="button" class="keypadKey shippingKey" data-key="shipping">＋ 送料500円</button>';
+      + `<div class="keypadUtility"><button type="button" class="keypadKey" data-key="mode">数字／英字</button><button type="button" class="keypadKey" data-key="clear">クリア</button><button type="button" class="keypadKey addKey" data-key="add">追加</button></div><button type="button" class="keypadKey shippingKey" data-key="shipping">＋ 送料${SHIPPING_PRICE}円（税抜）</button>`;
     modeButton.textContent = draft.keypadMode === "alpha" ? "英字・記号" : "数字・記号";
     wrap.querySelectorAll("[data-key]").forEach((button) => button.addEventListener("click", () => {
       query.blur();
       const key = button.dataset.key;
       if (key === "shipping") {
-        const alreadyAdded = draft.items.some(isShipping);
+        const existingShipping = draft.items.find(isShipping);
         draft.items = withShipping(draft.items);
         renderCart();
-        toast(alreadyAdded ? "送料500円は追加済みです" : "送料500円を追加しました");
+        toast(existingShipping?.price === SHIPPING_PRICE ? `送料${SHIPPING_PRICE}円は追加済みです` : existingShipping ? `送料を税抜${SHIPPING_PRICE}円に更新しました` : `送料${SHIPPING_PRICE}円（税抜）を追加しました`);
         return;
       }
       if (key === "mode") draft.keypadMode = draft.keypadMode === "alpha" ? "number" : "alpha";
@@ -810,7 +813,7 @@ function renderCart() {
     <div class="cartLine" data-item-index="${index}">
       <div><b>${isShipping(item) ? "送料" : `No.${escapeHtml(item.code)}`}</b><small>${escapeHtml(item.name)}</small></div>
       <div class="qty">
-        ${isShipping(item) ? '<span class="shippingAmount">¥500（一律）</span>' : `
+        ${isShipping(item) ? `<span class="shippingAmount">${yen(item.price)}（税抜）</span>` : `
         <button type="button" data-qty-action="minus" aria-label="数量を減らす">−</button>
         <input type="number" min="1" max="999" inputmode="numeric" value="${item.qty}" data-qty-action="input" aria-label="数量">
         <button type="button" data-qty-action="plus" aria-label="数量を増やす">＋</button>`}
@@ -922,7 +925,7 @@ function renderInfoStep() {
     <div class="field"><label for="fCustomer">お客様名 *</label><input id="fCustomer" value="${escapeHtml(draft.customer)}" autocomplete="name"></div>
     <div class="two"><div class="field"><label for="fRegion">お客様</label><select id="fRegion"><option value="domestic" ${draft.customerRegion === "domestic" ? "selected" : ""}>国内</option><option value="overseas" ${draft.customerRegion === "overseas" ? "selected" : ""}>海外</option></select></div><div class="field"><label for="fPayment">会計方法 *</label><select id="fPayment"><option value="credit" ${draft.paymentMethod === PAYMENT.CREDIT ? "selected" : ""}>クレジット</option><option value="cash" ${draft.paymentMethod === PAYMENT.CASH ? "selected" : ""}>現金</option></select></div></div>
     ${paymentFields}${pickupFields}${destinationFields}`;
-  const itemSummary = draft.items.map((item) => `<div class="summaryRow"><span>${isShipping(item) ? "送料（一律）" : `${escapeHtml(item.code)} ${escapeHtml(item.name)} × ${item.qty}`}</span><b>${normal && !isShipping(item) ? `${item.qty}点` : yen(item.price * item.qty)}</b></div>`).join("");
+  const itemSummary = draft.items.map((item) => `<div class="summaryRow"><span>${isShipping(item) ? "送料（税抜）" : `${escapeHtml(item.code)} ${escapeHtml(item.name)} × ${item.qty}`}</span><b>${normal && !isShipping(item) ? `${item.qty}点` : yen(item.price * item.qty)}</b></div>`).join("");
   $("sheetBody").innerHTML = `
     <div class="step">
       <div class="section">
@@ -931,7 +934,7 @@ function renderInfoStep() {
         ${normal ? normalFields : spotFields}
         <div class="field"><label for="fNotes">備考（任意）</label><textarea id="fNotes" placeholder="納期・連絡事項など">${escapeHtml(draft.notes)}</textarea></div>
       </div>
-      <div class="section"><div class="sectionTitle">注文確認</div>${itemSummary}<div class="summaryRow total"><span>合計</span><b>${normal ? `${totalQuantity(draft.items)}点` : yen(totalPrice(draft.items))}</b></div></div>
+      <div class="section"><div class="sectionTitle">注文確認</div>${itemSummary}${normal ? `<div class="summaryRow total"><span>合計点数</span><b>${totalQuantity(draft.items)}点</b></div>` : `<div class="summaryRow"><span>税抜合計</span><b>${yen(totalPrice(draft.items))}</b></div><div class="summaryRow total"><span>税込合計（10％）</span><b>${yen(taxIncludedTotal(draft.items))}</b></div>`}</div>
       ${isPickupOrder(draft) ? `<div class="pickupBadge">お渡し番号 <b>${escapeHtml(pickupNumber(draft) || "下のボタンで発行")}</b></div>${draft.editingId && isOrderConfirmed(draft) ? `<div class="field"><label>お渡し状況</label><div class="seg"><button type="button" id="notDelivered" class="${!draft.delivered ? "on" : ""}">未お渡し</button><button type="button" id="markDelivered" class="${draft.delivered ? "on" : ""}">お渡し済み</button></div></div>` : ""}` : ""}
       <div class="hintBox sendHint">${needsSlackShare(draft) ? `① ${isPickupOrder(draft) ? "お渡し番号を発行" : "共有用の控えを作成"} → ② Slackに共有 → ③ 注文を確定<br>まず一時保存します。Slack共有前には確定されません。${draft.editingId ? "内容を変更した場合は、再度共有してください。発行済みのお渡し番号は変わりません。" : ""}` : "注文を共有履歴へ保存してから、注文書プレビューを開きます。"}</div>
       ${draft.paymentMethod === PAYMENT.CASH ? '<div class="hintBox topGap">現金は受取金額を確認してください。</div>' : ""}
@@ -1125,7 +1128,7 @@ function receiptCopyHtml(draft, date, companyCopy) {
     </div>
     <div class="receiptFooterGrid">
       <div class="receiptMemoStack">${notesHtml}</div>
-      <div><div class="receiptSummaryBox"><div class="receiptSummaryRow"><span>${t("点数", "Items")}</span><span>${totalQuantity(draft.items)}</span></div><div class="receiptSummaryRow total"><span>${t("合計", "Total")}</span><span>${yen(totalPrice(draft.items))}</span></div></div><div class="receiptCurrencyNote">${t("通貨：JPY", "Currency: JPY")}</div></div>
+      <div><div class="receiptSummaryBox"><div class="receiptSummaryRow"><span>${t("点数", "Items")}</span><span>${totalQuantity(draft.items)}</span></div><div class="receiptSummaryRow"><span>${t("税抜合計", "Subtotal excl. tax")}</span><span>${yen(totalPrice(draft.items))}</span></div><div class="receiptSummaryRow"><span>${t("消費税（10％）", "Tax (10%)")}</span><span>${yen(taxAmount(draft.items))}</span></div><div class="receiptSummaryRow total"><span>${t("税込合計", "Total incl. tax")}</span><span>${yen(taxIncludedTotal(draft.items))}</span></div></div><div class="receiptCurrencyNote">${t("通貨：JPY", "Currency: JPY")}</div></div>
     </div>
     <div class="receiptFooterMini"><span>${company} ／ ${copyLabel}</span><span>${t("注文番号", "Order No.")} ${escapeHtml(orderNumber(draft))}</span></div></article>`;
 }

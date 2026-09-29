@@ -57,10 +57,11 @@ export function pickupNumber(order) {
   return generation > 1 ? `JEX-${generation}-${order.pickupNumber}` : `JEX-${order.pickupNumber}`;
 }
 export const SHIPPING_CODE = "送料";
-export const SHIPPING_PRICE = 500;
+export const SHIPPING_PRICE = 600;
+export const TAX_RATE = 0.1;
 export function isShipping(item) { return item?.code === SHIPPING_CODE; }
 export function withShipping(items = []) {
-  return [...items.filter((item) => !isShipping(item)), { code: SHIPPING_CODE, name: "送料（一律）", price: SHIPPING_PRICE, qty: 1 }];
+  return [...items.filter((item) => !isShipping(item)), { code: SHIPPING_CODE, name: "送料（一律・税抜）", price: SHIPPING_PRICE, qty: 1 }];
 }
 
 export function normalizeText(value) {
@@ -106,6 +107,14 @@ export function totalQuantity(items = []) {
 
 export function totalPrice(items = []) {
   return items.reduce((sum, item) => sum + Number(item.price || 0) * Number(item.qty || 0), 0);
+}
+
+export function taxAmount(items = []) {
+  return Math.floor(totalPrice(items) * TAX_RATE + 1e-8);
+}
+
+export function taxIncludedTotal(items = []) {
+  return totalPrice(items) + taxAmount(items);
 }
 
 export function validateDraft(draft) {
