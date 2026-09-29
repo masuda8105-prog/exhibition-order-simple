@@ -52,7 +52,9 @@ export function setSlackShared(order, shared, now = new Date().toISOString()) {
   return { ...next, workflowStatus: workflowStatus(next) };
 }
 export function pickupNumber(order) {
-  return isPickupOrder(order) && /^[1-9]\d*$/.test(String(order.pickupNumber || "")) ? `JEX-${order.pickupNumber}` : "";
+  if (!isPickupOrder(order) || !/^[1-9]\d*$/.test(String(order.pickupNumber || ""))) return "";
+  const generation = Number(order.pickupGeneration || 1);
+  return generation > 1 ? `JEX-${generation}-${order.pickupNumber}` : `JEX-${order.pickupNumber}`;
 }
 export const SHIPPING_CODE = "送料";
 export const SHIPPING_PRICE = 500;

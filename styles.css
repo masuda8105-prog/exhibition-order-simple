@@ -65,16 +65,27 @@ h2 { margin: 0; }
 .historySummary .compact { min-height: 42px; }
 .orderSearchWrap { margin: 12px 0; }
 .orderSearchWrap input { display: block; width: 100%; min-width: 0; height: 48px; padding: 0 13px; border: 1px solid #d0d5dd; border-radius: 14px; background: #fff; font-size: 16px; }
+.orderFilters { display: flex; gap: 7px; margin: 0 0 12px; overflow-x: auto; padding-bottom: 2px; }
+.orderFilters button { flex: 0 0 auto; min-height: 42px; padding: 0 12px; border: 1px solid var(--line); border-radius: 12px; background: #fff; color: var(--ink); font-size: 12px; font-weight: 850; }
+.orderFilters button.on { border-color: #111827; background: #111827; color: #fff; }
 .orderHistory { display: grid; gap: 10px; }
 .orderCard { min-width: 0; padding: 13px; border: 1px solid var(--line); border-radius: 17px; background: #fff; }
-.orderCardTop, .orderCardBottom { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.orderCardTop, .orderCardBottom { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-width: 0; }
+.orderCardTop { flex-wrap: wrap; }
 .orderCardTop > div { min-width: 0; }
 .orderCardTop small { color: var(--ok); font-size: 11px; font-weight: 900; overflow-wrap: anywhere; }
 .orderCardTop h3 { margin: 2px 0 0; font-size: 16px; overflow-wrap: anywhere; }
-.orderCardTop > b { flex: 0 0 auto; white-space: nowrap; }
+.orderCardTop > b { flex: 0 0 auto; margin-left: auto; white-space: nowrap; }
 .orderCardMeta { margin: 9px 0; color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
 .orderCardBottom > span { color: var(--muted); font-size: 11px; }
+.orderCardActions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; min-width: 0; }
 .orderCardBottom .compact { min-height: 42px; padding-inline: 12px; }
+.dangerButton { border-color: #fecdca; color: var(--danger); }
+.orderAdmin { margin: 24px 0 8px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; background: #fff; color: var(--muted); font-size: 12px; }
+.orderAdmin summary { cursor: pointer; font-weight: 850; }
+.orderAdmin p { line-height: 1.5; }
+.orderAdmin button { width: 100%; }
+@media (max-width: 520px) { .orderCardBottom { align-items: flex-start; flex-direction: column; } .orderCardActions { width: 100%; justify-content: stretch; } .orderCardActions button { flex: 1 1 auto; } }
 .historyEmpty { padding: 30px 12px; border: 1px dashed #d0d5dd; border-radius: 16px; color: var(--muted); text-align: center; }
 .srOnly { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
 .homeCard { margin-top: 18px; padding: 34px 20px; border: 1px solid var(--line); border-radius: 20px; background: #fff; text-align: center; }

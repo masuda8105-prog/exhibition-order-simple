@@ -79,7 +79,9 @@ export function orderFromRow(row) {
     : {};
   return {
     ...payload,
-    pickupNumber: row?.simple_pickup_number == null ? "" : String(row.simple_pickup_number),
+    pickupNumber: row?.simple_pickup_run_number == null && row?.simple_pickup_number == null
+      ? "" : String(row?.simple_pickup_run_number ?? row?.simple_pickup_number),
+    pickupGeneration: row?.simple_pickup_generation == null ? 1 : Number(row.simple_pickup_generation),
     items: Array.isArray(payload.items) ? payload.items.map((item) => ({ ...item })) : [],
     localId: String(row?.id || ""),
     createdAt: row?.created_at || "",

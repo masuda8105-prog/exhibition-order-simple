@@ -77,4 +77,8 @@ test('お渡し番号はサーバー列だけを採用し、後日受取にJEX�
   assert.equal(pickupNumber({...saved,pickupNumber:'0'}),'');
   assert.equal(Object.hasOwn(payloadForOrder(saved),'pickupNumber'),false);
   assert.equal(pickupNumber(orderFromRow({simple_pickup_number:12,payload:payloadForOrder({...saved,pickupDate:'2030-01-02'})})),'JEX-12');
+  const afterReset = orderFromRow({id:'another-order',simple_pickup_number:22,simple_pickup_run_number:1,simple_pickup_generation:2,payload});
+  assert.equal(pickupNumber(afterReset),'JEX-2-1');
+  assert.equal(orderMatches(afterReset,'jex-2-1'),true);
+  assert.equal(Object.hasOwn(payloadForOrder(afterReset),'pickupGeneration'),false);
 });

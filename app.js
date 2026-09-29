@@ -68,6 +68,7 @@ const state = {
   saving: false,
   syncInFlight: null,
   dataEpoch: 0,
+  historyFilter: "all",
 };
 
 function escapeHtml(value) {
@@ -203,7 +204,7 @@ async function fetchOrders() {
   for (let from = 0; ; from += pageSize) {
     const { data, error } = await supabase
       .from("exhibition_app_orders")
-      .select("id,payload,created_at,updated_at,simple_pickup_number")
+      .select("id,payload,created_at,updated_at,simple_pickup_number,simple_pickup_generation,simple_pickup_run_number")
       .eq("event_name", SYNC_EVENT_NAME)
       .is("deleted_at", null)
       .order("created_at", { ascending: false })
@@ -270,7 +271,7 @@ async function saveDraftToCloud() {
         .eq("event_name", SYNC_EVENT_NAME)
         .eq("updated_at", draft.cloudUpdatedAt)
         .is("deleted_at", null)
-        .select("id,payload,created_at,updated_at,simple_pickup_number")
+        .select("id,payload,created_at,updated_at,simple_pickup_number,simple_pickup_generation,simple_pickup_run_number")
         .maybeSingle();
       if (error) throw error;
       if (!data) {
@@ -282,12 +283,12 @@ async function saveDraftToCloud() {
       const { data, error } = await supabase
         .from("exhibition_app_orders")
         .insert({ id: draft.localId, event_name: SYNC_EVENT_NAME, payload })
-        .select("id,payload,created_at,updated_at,simple_pickup_number")
+        .select("id,payload,created_at,updated_at,simple_pickup_number,simple_pickup_generation,simple_pickup_run_number")
         .single();
       if (error && error.code !== "23505") throw error;
       if (error) {
         const existing = await supabase.from("exhibition_app_orders")
-          .select("id,payload,created_at,updated_at,simple_pickup_number")
+          .select("id,payload,created_at,updated_at,simple_pickup_number,simple_pickup_generation,simple_pickup_run_number")
           .eq("id", draft.localId).eq("event_name", SYNC_EVENT_NAME)
           .is("deleted_at", null).single();
         if (existing.error) throw existing.error;
@@ -312,8 +313,13 @@ function renderHistory() {
   const container = $("orderHistory");
   if (!container) return;
   const query = $("orderSearch")?.value || "";
-  const list = state.orders.filter((order) => orderMatches(order, query));
+  const list = state.orders.filter((order) => orderMatches(order, query)
+    && (state.historyFilter === "all" || workflowStatus(order) === state.historyFilter));
   $("orderCount").textContent = `${state.orders.length}件`;
+  document.querySelectorAll("[data-order-filter]").forEach(button => {
+    button.classList.toggle("on", button.dataset.orderFilter === state.historyFilter);
+    button.setAttribute("aria-pressed", String(button.dataset.orderFilter === state.historyFilter));
+  });
   container.innerHTML = list.length ? list.map((order) => `
     <article class="orderCard">
       <div class="orderCardTop">
@@ -322,12 +328,20 @@ function renderHistory() {
       </div>
       <div class="orderCardMeta">${escapeHtml(orderLabel(order))}・${totalQuantity(order.items)}点${order.customer ? `・${escapeHtml(order.customer)}` : ""}</div>
       ${pickupNumber(order) ? `<div class="pickupBadge">お渡し番号 <b>${escapeHtml(pickupNumber(order))}</b></div>` : ""}
-      ${needsSlackShare(order) ? `<div class="orderCardMeta ${isOrderConfirmed(order) ? "" : "orderPending"}">${escapeHtml(statusLabel(order))} ／ ${order.slackShared ? "Slack共有済み" : "Slack未共有"}</div>` : ""}
-      <div class="orderCardBottom"><span>${escapeHtml(formatDateTime(order.updatedAt || order.createdAt))}</span><button type="button" class="secondary compact" data-open-order="${escapeHtml(order.localId)}">${needsSlackShare(order) && !isOrderConfirmed(order) ? "共有・確定を続ける" : "変更・印刷"}</button></div>
-    </article>`).join("") : '<div class="historyEmpty">保存済み注文はありません。</div>';
+      <div class="orderCardMeta ${workflowStatus(order) === "active" ? "orderPending" : ""}">${escapeHtml(statusLabel(order))}${needsSlackShare(order) ? ` ／ ${order.slackShared ? "Slack共有済み" : "Slack未共有"}` : ""}</div>
+      <div class="orderCardBottom"><span>${escapeHtml(formatDateTime(order.updatedAt || order.createdAt))}</span><div class="orderCardActions"><button type="button" class="secondary compact" data-open-order="${escapeHtml(order.localId)}">${needsSlackShare(order) ? "確認・共有" : "確認・印刷"}</button><button type="button" class="secondary compact" data-edit-order="${escapeHtml(order.localId)}">修正</button><button type="button" class="secondary compact dangerButton" data-cancel-order="${escapeHtml(order.localId)}">キャンセル</button></div></div>
+    </article>`).join("") : `<div class="historyEmpty">${state.orders.length ? "この条件の注文はありません。" : "保存済み注文はありません。"}</div>`;
   container.querySelectorAll("[data-open-order]").forEach((button) => button.addEventListener("click", () => {
     const order = state.orders.find((item) => item.localId === button.dataset.openOrder);
     if (order) openSavedOrder(order);
+  }));
+  container.querySelectorAll("[data-edit-order]").forEach((button) => button.addEventListener("click", () => {
+    const order = state.orders.find((item) => item.localId === button.dataset.editOrder);
+    if (order) openSavedOrder(order, { edit: true });
+  }));
+  container.querySelectorAll("[data-cancel-order]").forEach((button) => button.addEventListener("click", () => {
+    const order = state.orders.find((item) => item.localId === button.dataset.cancelOrder);
+    if (order) cancelSavedOrder(order);
   }));
 }
 
@@ -338,7 +352,7 @@ function formatDateTime(value) {
   }).format(date);
 }
 
-function openSavedOrder(order) {
+function openSavedOrder(order, { edit = false } = {}) {
   state.draft = {
     ...order,
     items: (order.items || []).map((item) => ({ ...item })),
@@ -348,6 +362,13 @@ function openSavedOrder(order) {
     keypadMode: "number",
   };
   state.createdAt = new Date(order.createdAt || Date.now());
+  if (edit) {
+    $("receiptView").classList.add("hidden");
+    $("appView").classList.remove("hidden");
+    openSheet();
+    renderDraft();
+    return;
+  }
   renderReceipt();
   closeSheet();
   $("appView").classList.add("hidden");
@@ -355,6 +376,83 @@ function openSavedOrder(order) {
   $("receiptActions").classList.remove("hidden");
   $("printedActions").classList.remove("hidden");
   window.scrollTo({ top: 0 });
+}
+
+async function cancelSavedOrder(order) {
+  if (state.saving) return;
+  const label = `${orderNumber(order)}　${order.store || "店舗名なし"}`;
+  if (!window.confirm(`${label}\nこの注文をキャンセルして一覧から外しますか？\n発行済みのお渡し番号は再利用されません。`)) return;
+  state.saving = true;
+  try {
+    if (!isLocalDemo) {
+      const { data, error } = await supabase.from("exhibition_app_orders")
+        .update({ deleted_at: new Date().toISOString() })
+        .eq("id", order.localId)
+        .eq("event_name", SYNC_EVENT_NAME)
+        .eq("updated_at", order.cloudUpdatedAt)
+        .is("deleted_at", null)
+        .select("id")
+        .maybeSingle();
+      if (error) throw error;
+      if (!data) throw new Error("SYNC_CONFLICT");
+    }
+    state.orders = state.orders.filter(item => item.localId !== order.localId);
+    if (state.draft?.localId === order.localId) {
+      clearCurrentOrder();
+      state.draft = null;
+    }
+    renderHistory();
+    toast("注文をキャンセルしました");
+  } catch (error) {
+    console.error(error);
+    toast(error.message === "SYNC_CONFLICT" ? "ほかの端末で変更されました。同期して確認してください" : "キャンセルできませんでした。通信を確認してください");
+    await syncOrders({ quiet: true });
+  } finally {
+    state.saving = false;
+  }
+}
+
+function formatNextPickupNumber(counter) {
+  return Number(counter.generation) > 1
+    ? `JEX-${counter.generation}-${counter.next_number}`
+    : `JEX-${counter.next_number}`;
+}
+
+async function loadPickupCounterStatus() {
+  if (isLocalDemo) {
+    $("pickupCounterStatus").textContent = `次: ${formatNextPickupNumber({ generation: demoPickupGeneration, next_number: demoPickupCounter + 1 })}`;
+    return;
+  }
+  const { data, error } = await supabase.rpc("simple_pickup_counter_status");
+  if (error) throw error;
+  $("pickupCounterStatus").textContent = `次: ${formatNextPickupNumber(data)}`;
+}
+
+async function resetPickupCounter() {
+  if (state.saving) return;
+  const answer = window.prompt("お渡し番号を1から始めます。過去の番号との重複を防ぐため区切り番号が付きます。\n実行するには「リセット」と入力してください。");
+  if (answer !== "リセット") return;
+  const button = $("resetPickupCounter");
+  button.disabled = true;
+  try {
+    if (isLocalDemo) {
+      demoPickupGeneration += 1;
+      demoPickupCounter = 0;
+    } else {
+      const { data, error } = await supabase.rpc("reset_simple_pickup_counter", {
+        p_confirmation: "リセット", p_request_id: newUuid(),
+      });
+      if (error) throw error;
+      $("pickupCounterStatus").textContent = `次: ${formatNextPickupNumber(data)}`;
+    }
+    await loadPickupCounterStatus();
+    toast("次のお渡し番号を1から開始します");
+  } catch (error) {
+    console.error(error);
+    toast("番号をリセットできませんでした。通信を確認してください");
+  } finally {
+    button.disabled = false;
+  }
 }
 
 async function openForSession(session) {
@@ -926,9 +1024,13 @@ async function persistCurrentDraft() {
 }
 
 let demoPickupCounter = 0;
+let demoPickupGeneration = 1;
 function saveLocalDemoDraft(nowIso = new Date().toISOString()) {
-  if (isPickupOrder(state.draft) && !state.draft.pickupNumber) state.draft.pickupNumber = String(++demoPickupCounter);
-  return orderFromRow({ id: state.draft.localId, simple_pickup_number: state.draft.pickupNumber || null, payload: payloadForOrder(state.draft), created_at: state.draft.createdAt || nowIso, updated_at: nowIso });
+  if (isPickupOrder(state.draft) && !state.draft.pickupNumber) {
+    state.draft.pickupNumber = String(++demoPickupCounter);
+    state.draft.pickupGeneration = demoPickupGeneration;
+  }
+  return orderFromRow({ id: state.draft.localId, simple_pickup_number: state.draft.pickupNumber || null, simple_pickup_generation: state.draft.pickupNumber ? state.draft.pickupGeneration || 1 : null, payload: payloadForOrder(state.draft), created_at: state.draft.createdAt || nowIso, updated_at: nowIso });
 }
 
 async function printReceipt({ sharing = false } = {}) {
@@ -1172,6 +1274,15 @@ function bindStaticEvents() {
   $("backToHistoryButton").addEventListener("click", showHistory);
   $("refreshOrders").addEventListener("click", () => isLocalDemo ? renderHistory() : syncOrders());
   $("orderSearch").addEventListener("input", renderHistory);
+  document.querySelectorAll("[data-order-filter]").forEach(button => button.addEventListener("click", () => {
+    state.historyFilter = button.dataset.orderFilter;
+    renderHistory();
+  }));
+  $("resetPickupCounter").addEventListener("click", resetPickupCounter);
+  $("pickupCounterStatus").closest("details").addEventListener("toggle", event => {
+    if (!event.target.open || !state.profile) return;
+    loadPickupCounterStatus().catch(error => { console.error(error); $("pickupCounterStatus").textContent = "番号を確認できませんでした"; });
+  });
   $("closeSheetButton").addEventListener("click", closeSheet);
   $("backToEditButton").addEventListener("click", () => {
     $("receiptView").classList.add("hidden");
