@@ -18,6 +18,35 @@ test("再開後の次のお渡し番号は区切りを付けずJEX-1と表示す
   assert.equal(format({generation:6,next_number:1}), "JEX-1");
 });
 
+test("注文履歴は状態別に分けず税込合計を表示する", () => {
+  const history = { innerHTML: "", querySelectorAll: () => [] };
+  const count = { textContent: "" };
+  const search = { value: "" };
+  const render = runInNewContext(`${appFunction("renderHistory")}; renderHistory`, {
+    state: { orders: [{ localId: "one", store: "試験店", items: [{ code: "A", qty: 1, price: 100 }] }] },
+    $: id => ({ orderHistory: history, orderCount: count, orderSearch: search })[id],
+    orderMatches: () => true, orderNumber: () => "TEST-1", orderLabel: () => "現売り",
+    totalQuantity: domain.totalQuantity, taxIncludedTotal: domain.taxIncludedTotal,
+    pickupNumber: () => "", needsSlackShare: () => false, formatDateTime: () => "9/30 10:00",
+    escapeHtml: String, yen: value => `¥${value}`,
+  });
+  render();
+  assert.equal(count.textContent, "1件");
+  assert.match(history.innerHTML, /税込合計<\/small>¥110/);
+  assert.doesNotMatch(history.innerHTML, /受け取り待ち|要対応|完了/);
+  const html = readFileSync(new URL("../index.html", import.meta.url), "utf8");
+  assert.match(html, /注文履歴/);
+  assert.doesNotMatch(html, /data-order-filter/);
+});
+
+test("通常注文の確認にも税抜・税込合計を出し写真入力は設けない", () => {
+  assert.match(source, /<span>税抜合計<\/span>/);
+  assert.match(source, /<span>税込合計（10％）<\/span>/);
+  assert.doesNotMatch(source, /capture="environment"|uploadOrderPhoto|downloadOrderPhotos|attachmentPickerHtml/);
+  const pdf = readFileSync(new URL("../order-pdf.js", import.meta.url), "utf8");
+  assert.doesNotMatch(pdf, /shareAttachmentPage|attachment/);
+});
+
 test("候補タップは検索・候補DOM・フォーカスを維持して枝番を連続追加できる", () => {
   const state = { draft: { items: [], productQuery: "893" } };
   const query = { value: "893" };
@@ -55,7 +84,6 @@ test("控えに現金・クレジットを表示し、ご案内定型文は出�
       receiptHandoffLabel: () => "その場渡し", receiptInfo: (label, value) => `${label}:${value}`,
       escapeHtml: (value) => String(value ?? ""), yen: (value) => `¥${value}`, logoUrl: "test.jpg",
       renderReceiptOperations: () => {}, clearGeneratedPdf: () => {},
-      attachmentPagesHtml: () => "",
     });
     render();
     assert.ok(card.innerHTML.includes(`会計方法:${expected}`));
@@ -124,29 +152,24 @@ test("全注文区分で会社控えを先に出し、両控えで番号・金�
   assert.match(css,/\.receiptCopy \+ \.receiptCopy \{ break-before: page !important/);
 });
 
-test("通常は2部、Slack用は2部と添付写真を印刷し、画像の読込みを待つ", async () => {
-  const modes = [];
+test("通常もSlack用も会社控え・お客様控えの2部をPDFにする", async () => {
+  const calls = [];
   let decoded = 0;
-  let photos = [];
   const document = { body: { dataset: {} }, fonts: { ready: Promise.resolve() }, querySelectorAll: () => [] };
   const state = { draft: { type: 'spot', handoff: 'later', pickupNumber: '3' } };
   const print = runInNewContext(`async ${appFunction('printReceipt')}; printReceipt`, {
-    ...domain, state, document, attachmentBusy: false,
-    attachmentStore: { list: () => photos },
-    $: () => ({ querySelectorAll: selector => (selector.includes('Logo') ? [1,2] : [1]).map(() => ({decode:async () => { decoded++; }})) }),
-    createOrderPdf: async (_card, sharing) => { modes.push(sharing ? 'sharing' : 'both'); return {blob:{},pages:2}; },
+    ...domain, state, document,
+    $: () => ({ querySelectorAll: () => [1,2].map(() => ({decode:async () => { decoded++; }})) }),
+    createOrderPdf: async () => { calls.push('2 copies'); return {blob:{},pages:2}; },
     offerOrderPdf: () => {}, orderNumber: () => 'TEST', toast: () => {},
   });
-  await print({sharing:true});
   await print();
-  assert.deepEqual(modes,['sharing','both']);
-  assert.equal(decoded,5);
-  photos = [{ id: 'photo' }];
   await print();
-  assert.deepEqual(modes,['sharing','both','sharing']);
+  assert.deepEqual(calls,['2 copies','2 copies']);
+  assert.equal(decoded,4);
   state.draft.pickupNumber = '';
   await print();
-  assert.equal(modes.length,3);
+  assert.equal(calls.length,2);
 });
 
 test("お客様控え画像は印刷用の控えを元に作って共有する", async () => {
@@ -155,7 +178,7 @@ test("お客様控え画像は印刷用の控えを元に作って共有する",
   const card = { id: 'receiptCard' };
   const blob = new Blob(['png'], { type: 'image/png' });
   const share = runInNewContext(`async ${appFunction('shareCustomerCopy')}; shareCustomerCopy`, {
-    attachmentBusy: false, printReceipt: { busy: false },
+    printReceipt: { busy: false },
     $: id => id === 'customerImageButton' ? button : card,
     document: { fonts: { ready: Promise.resolve() } },
     state: { draft: { localId: 'test' } },

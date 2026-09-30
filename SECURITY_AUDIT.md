@@ -30,12 +30,12 @@
 | 保存場所 | 内容 |
 |---|---|
 | GitHub | UIコード、公開ロゴ、RLSマイグレーション、取込スクリプト、テスト、空の環境変数例 |
-| Supabase | Authユーザー、`exhibition_staff`、`products`、`exhibition_accounts`、共有注文 `exhibition_app_orders`、非公開Storage `exhibition-simple-photos` の添付JPEG |
+| Supabase | Authユーザー、`exhibition_staff`、`products`、`exhibition_accounts`、共有注文 `exhibition_app_orders`、旧写真3件を保全する非公開Storage `exhibition-simple-photos`（ブラウザからのアクセス停止） |
 | ブラウザメモリ | ログイン後に取得した商品、入力中の顧客・注文・備考、印刷プレビュー |
 | localStorage | Supabase Authセッションのみ。自動更新し、明示ログアウトまで保持 |
 
 注文・顧客情報はRLS保護された `exhibition_app_orders.payload` に保存し、有効スタッフだけが参照・作成・変更できます。GitHubや端末設定には保存しません。
-添付写真は注文ID単位の非公開Storageへ保存します。元写真のEXIFを除去してからアップロードし、StorageのRLSで有効スタッフかつSIMPLE注文に限定します。
+写真撮影・添付機能は廃止しました。旧写真は非公開Storageに保全し、Storageの写真用RLSポリシーを削除してブラウザからの読み書きを停止します。公開リポジトリへ写真は含めません。
 
 ## 実施済み確認
 

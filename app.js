@@ -2,7 +2,6 @@ import { createClient } from "@supabase/supabase-js";
 import logoUrl from "./assets/sun_nishimura_logo.jpg";
 import { clearOrderData } from "./order-privacy.js";
 import { clearGeneratedPdf, createCustomerImage, createOrderPdf, offerOrderPdf, shareCustomerImage } from "./order-pdf.js";
-import { MAX_PHOTOS, createAttachmentStore, deleteOrderPhoto, downloadOrderPhotos, preparePhoto, uploadOrderPhoto } from "./order-attachments.js";
 import {
   SYNC_EVENT_NAME,
   orderFromRow,
@@ -22,7 +21,6 @@ import {
   confirmOrder,
   prepareOrder,
   needsSlackShare,
-  workflowStatus,
   setSlackShared,
   pickupNumber,
   isShipping,
@@ -39,8 +37,6 @@ import {
 } from "./order-domain.js";
 
 const $ = (id) => document.getElementById(id);
-const attachmentStore = createAttachmentStore();
-let attachmentBusy = false;
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL?.trim();
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY?.trim();
 const isLocalDemo = ["127.0.0.1", "localhost"].includes(location.hostname)
@@ -71,7 +67,6 @@ const state = {
   saving: false,
   syncInFlight: null,
   dataEpoch: 0,
-  historyFilter: "all",
 };
 
 function escapeHtml(value) {
@@ -316,24 +311,18 @@ function renderHistory() {
   const container = $("orderHistory");
   if (!container) return;
   const query = $("orderSearch")?.value || "";
-  const list = state.orders.filter((order) => orderMatches(order, query)
-    && (state.historyFilter === "all" || workflowStatus(order) === state.historyFilter));
+  const list = state.orders.filter((order) => orderMatches(order, query));
   $("orderCount").textContent = `${state.orders.length}件`;
-  document.querySelectorAll("[data-order-filter]").forEach(button => {
-    button.classList.toggle("on", button.dataset.orderFilter === state.historyFilter);
-    button.setAttribute("aria-pressed", String(button.dataset.orderFilter === state.historyFilter));
-  });
   container.innerHTML = list.length ? list.map((order) => `
     <article class="orderCard">
       <div class="orderCardTop">
         <div><small>${escapeHtml(orderNumber(order))}</small><h3>${escapeHtml(order.store || "店舗名なし")}</h3></div>
-        <b>${yen(totalPrice(order.items))}</b>
+        <b class="orderCardTotal"><small>税込合計</small>${yen(taxIncludedTotal(order.items || []))}</b>
       </div>
       <div class="orderCardMeta">${escapeHtml(orderLabel(order))}・${totalQuantity(order.items)}点${order.customer ? `・${escapeHtml(order.customer)}` : ""}</div>
       ${pickupNumber(order) ? `<div class="pickupBadge">お渡し番号 <b>${escapeHtml(pickupNumber(order))}</b></div>` : ""}
-      <div class="orderCardMeta ${workflowStatus(order) === "active" ? "orderPending" : ""}">${escapeHtml(statusLabel(order))}${needsSlackShare(order) ? ` ／ ${order.slackShared ? "Slack共有済み" : "Slack未共有"}` : ""}</div>
       <div class="orderCardBottom"><span>${escapeHtml(formatDateTime(order.updatedAt || order.createdAt))}</span><div class="orderCardActions"><button type="button" class="secondary compact" data-open-order="${escapeHtml(order.localId)}">${needsSlackShare(order) ? "確認・共有" : "確認・印刷"}</button><button type="button" class="secondary compact" data-edit-order="${escapeHtml(order.localId)}">修正</button><button type="button" class="secondary compact dangerButton" data-cancel-order="${escapeHtml(order.localId)}">キャンセル</button></div></div>
-    </article>`).join("") : `<div class="historyEmpty">${state.orders.length ? "この条件の注文はありません。" : "保存済み注文はありません。"}</div>`;
+    </article>`).join("") : `<div class="historyEmpty">${state.orders.length ? "該当する注文はありません。" : "保存済み注文はありません。"}</div>`;
   container.querySelectorAll("[data-open-order]").forEach((button) => button.addEventListener("click", () => {
     const order = state.orders.find((item) => item.localId === button.dataset.openOrder);
     if (order) openSavedOrder(order);
@@ -356,22 +345,6 @@ function formatDateTime(value) {
 }
 
 async function openSavedOrder(order, { edit = false } = {}) {
-  if (attachmentBusy) return toast("写真の処理が終わるまでお待ちください。");
-  attachmentBusy = true;
-  try {
-    if (!isLocalDemo) {
-      toast("注文の写真を読み込んでいます…");
-      const generation = attachmentStore.generation;
-      const photos = await downloadOrderPhotos(supabase.storage, order.localId);
-      if (!attachmentStore.replace(order.localId, photos, generation)) return;
-    }
-  } catch (error) {
-    console.error("写真の読込みエラー", error);
-    toast("写真を読み込めませんでした。通信を確認して、注文を開き直してください。");
-    return;
-  } finally {
-    attachmentBusy = false;
-  }
   state.draft = {
     ...order,
     items: (order.items || []).map((item) => ({ ...item })),
@@ -604,7 +577,6 @@ function freshDraft() {
 
 function clearCurrentOrder() {
   clearGeneratedPdf();
-  attachmentStore.clear();
   clearOrderData(state, [$("sheetBody"), $("receiptCard"), $("receiptOperations"), $("sheetError")]);
 }
 
@@ -901,11 +873,6 @@ function renderTypeStep() {
   });
 }
 
-function statusLabel(order) {
-  if (needsSlackShare(order) && !isOrderConfirmed(order)) return order.slackShared ? "未確定・確定待ち" : "未確定・Slack共有待ち";
-  return { active: "要対応", waiting: "受け取り待ち", done: "完了" }[workflowStatus(order)];
-}
-
 function preparationLabel(order) {
   if (!needsSlackShare(order)) return "PDF・印刷へ";
   if (order.editingId && isOrderConfirmed(order)) return "変更を保存・確認へ";
@@ -950,8 +917,8 @@ function renderInfoStep() {
         ${normal ? normalFields : spotFields}
         <div class="field"><label for="fNotes">備考（任意）</label><textarea id="fNotes" placeholder="納期・連絡事項など">${escapeHtml(draft.notes)}</textarea></div>
       </div>
-      <div class="section"><div class="sectionTitle">注文確認</div>${itemSummary}${normal ? `<div class="summaryRow total"><span>合計点数</span><b>${totalQuantity(draft.items)}点</b></div>` : `<div class="summaryRow"><span>税抜合計</span><b>${yen(totalPrice(draft.items))}</b></div><div class="summaryRow total"><span>税込合計（10％）</span><b>${yen(taxIncludedTotal(draft.items))}</b></div>`}</div>
-      ${isPickupOrder(draft) ? `<div class="pickupBadge">お渡し番号 <b>${escapeHtml(pickupNumber(draft) || "下のボタンで発行")}</b></div>${draft.editingId && isOrderConfirmed(draft) ? `<div class="field"><label>お渡し状況</label><div class="seg"><button type="button" id="notDelivered" class="${!draft.delivered ? "on" : ""}">未お渡し</button><button type="button" id="markDelivered" class="${draft.delivered ? "on" : ""}">お渡し済み</button></div></div>` : ""}` : ""}
+      <div class="section"><div class="sectionTitle">注文確認</div>${itemSummary}<div class="summaryRow"><span>合計点数</span><b>${totalQuantity(draft.items)}点</b></div><div class="summaryRow"><span>税抜合計</span><b>${yen(totalPrice(draft.items))}</b></div><div class="summaryRow total"><span>税込合計（10％）</span><b>${yen(taxIncludedTotal(draft.items))}</b></div></div>
+      ${isPickupOrder(draft) ? `<div class="pickupBadge">お渡し番号 <b>${escapeHtml(pickupNumber(draft) || "下のボタンで発行")}</b></div>` : ""}
       <div class="hintBox sendHint">${needsSlackShare(draft) ? `① ${isPickupOrder(draft) ? "お渡し番号を発行" : "共有用の控えを作成"} → ② Slackに共有 → ③ 注文を確定<br>まず一時保存します。Slack共有前には確定されません。${draft.editingId ? "内容を変更した場合は、再度共有してください。発行済みのお渡し番号は変わりません。" : ""}` : "注文を共有履歴へ保存してから、注文書プレビューを開きます。"}</div>
       ${draft.paymentMethod === PAYMENT.CASH ? '<div class="hintBox topGap">現金は受取金額を確認してください。</div>' : ""}
     </div>
@@ -991,8 +958,6 @@ function bindInfoStep(normal, now) {
   if ($("fAccount")) $("fAccount").addEventListener("change", () => { rememberInfo(normal); renderDraft(); });
   if ($("payDone")) $("payDone").addEventListener("click", () => { rememberInfo(normal); state.draft.paid = true; renderDraft(); });
   if ($("payLater")) $("payLater").addEventListener("click", () => { rememberInfo(normal); state.draft.paid = false; renderDraft(); });
-  if ($("markDelivered")) $("markDelivered").addEventListener("click", () => { rememberInfo(normal); state.draft.delivered = true; state.draft.deliveredAt ||= new Date().toISOString(); renderDraft(); });
-  if ($("notDelivered")) $("notDelivered").addEventListener("click", () => { rememberInfo(normal); state.draft.delivered = false; state.draft.deliveredAt = ""; renderDraft(); });
   document.querySelectorAll("[data-day]").forEach((button) => button.addEventListener("click", () => { rememberInfo(normal); state.draft.pickupDate = dateOffset(Number(button.dataset.day)); renderDraft(); }));
   $("backType").addEventListener("click", () => { rememberInfo(normal); state.draft.stage = "type"; renderDraft(); });
   const saveAndPreview = async () => {
@@ -1052,9 +1017,8 @@ function saveLocalDemoDraft(nowIso = new Date().toISOString()) {
   return orderFromRow({ id: state.draft.localId, simple_pickup_number: state.draft.pickupNumber || null, simple_pickup_generation: state.draft.pickupNumber ? state.draft.pickupGeneration || 1 : null, payload: payloadForOrder(state.draft), created_at: state.draft.createdAt || nowIso, updated_at: nowIso });
 }
 
-async function printReceipt({ sharing = false } = {}) {
+async function printReceipt() {
   if (printReceipt.busy) return;
-  if (attachmentBusy) return toast("写真の読込みが終わるまでお待ちください。");
   if (isPickupOrder(state.draft) && !pickupNumber(state.draft)) {
     toast("お渡し番号を発行するため「戻って修正」から保存してください。");
     return;
@@ -1065,11 +1029,9 @@ async function printReceipt({ sharing = false } = {}) {
   controls.forEach(([control]) => { control.disabled = true; });
   try {
     await Promise.all([...$("receiptCard").querySelectorAll(".receiptBrandLogo")].map(image => image.decode()));
-    const includePhotos = sharing || attachmentStore.list(draft.localId).length > 0;
-    if (includePhotos) await Promise.all([...$("receiptCard").querySelectorAll(".shareAttachmentPage img")].map(image => image.decode()));
     await document.fonts.ready;
     toast("PDFを作成しています…");
-    const result = await createOrderPdf($("receiptCard"), includePhotos);
+    const result = await createOrderPdf($("receiptCard"));
     if (state.draft === draft) {
       offerOrderPdf(result, `注文書_${orderNumber(draft)}.pdf`);
       toast("PDFを作成しました。");
@@ -1077,7 +1039,7 @@ async function printReceipt({ sharing = false } = {}) {
   } catch (error) {
     console.error("PDF作成エラー", error.message);
     delete document.body.dataset.printCopy;
-    toast("PDFを作成できませんでした。写真の枚数や通信を確認して再度お試しください。");
+    toast("PDFを作成できませんでした。通信を確認して再度お試しください。");
   } finally {
     printReceipt.busy = false;
     controls.forEach(([control, disabled]) => { control.disabled = disabled; });
@@ -1085,7 +1047,7 @@ async function printReceipt({ sharing = false } = {}) {
 }
 
 async function shareCustomerCopy() {
-  if (attachmentBusy || printReceipt.busy) return toast("写真・PDFの処理が終わるまでお待ちください。");
+  if (printReceipt.busy) return toast("PDFの処理が終わるまでお待ちください。");
   const button = $("customerImageButton");
   button.disabled = true;
   try {
@@ -1126,7 +1088,7 @@ function renderReceipt() {
   clearGeneratedPdf();
   const draft = state.draft;
   const date = state.createdAt || new Date();
-  $("receiptCard").innerHTML = receiptCopyHtml(draft, date, true) + receiptCopyHtml(draft, date, false) + attachmentPagesHtml(draft);
+  $("receiptCard").innerHTML = receiptCopyHtml(draft, date, true) + receiptCopyHtml(draft, date, false);
   renderReceiptOperations();
 }
 
@@ -1174,7 +1136,7 @@ function renderReceiptOperations() {
   panel.after(pdfOutput);
   const order = state.draft;
   const required = needsSlackShare(order);
-  $("printButton").textContent = attachmentStore.list(order.localId).length ? "2部＋写真をPDF" : "2部を印刷";
+  $("printButton").textContent = "2部を印刷";
   $("receiptView").classList.toggle("slackWorkflow", required);
   const confirmed = isOrderConfirmed(order);
   const ready = Boolean(order.editingId && (!isPickupOrder(order) || pickupNumber(order)));
@@ -1185,8 +1147,7 @@ function renderReceiptOperations() {
     : "この注文は確定・保存済みです。印刷画面を閉じても入力内容は消えません。";
   $("printedActions").querySelector("p").textContent = required && !confirmed ? "次の注文へ進む前に、Slack共有と注文確定を済ませてください。" : "注文内容は保存されています。";
   if (!required) {
-    panel.innerHTML = attachmentPickerHtml(order, ready);
-    bindAttachmentPicker(order);
+    panel.replaceChildren();
     return;
   }
   panel.innerHTML = `
@@ -1194,14 +1155,12 @@ function renderReceiptOperations() {
       <div class="confirmationHeading"><h2>${confirmed ? "注文確定済み" : "あと少しで注文完了"}</h2><span class="confirmationStatus ${confirmed ? "done" : ""}">${confirmed ? "確定済み" : "未確定・一時保存"}</span></div>
       <ol class="confirmationSteps">
 <li class="${ready ? "done" : "current"}"><span class="flowNumber">${ready ? "✓" : "1"}</span><div><h3>${isPickupOrder(order) ? "お渡し番号を発行" : "共有用の控えを作成"}</h3>${isPickupOrder(order) ? `<strong class="flowPickup">${escapeHtml(pickupNumber(order) || "未発行")}</strong>` : ""}<p>${ready ? (isPickupOrder(order) ? "一時保存済み。同じ注文を開き直しても番号は変わりません。" : "一時保存済み。共有用PDFを作成できます。") : "「戻って修正」から共有用の控えを作成してください。"}</p></div></li>
-<li class="${order.slackShared ? "done" : ready ? "current" : ""}"><span class="flowNumber">${order.slackShared ? "✓" : "2"}</span><div><h3>Slackに共有</h3><p>会社控え・お客様控え・添付写真を1つのPDFにまとめます。PDFを作成したら、下に表示される「PDFを共有」からSlackへ投稿してください。会社控えは常に日本語です。</p><button id="receiptSlackSharedPrint" type="button" class="secondary" ${ready ? "" : "disabled"}>PDFを作成する</button><label class="flowShareCheck" for="receiptSlackShared"><input id="receiptSlackShared" type="checkbox" ${order.slackShared ? "checked" : ""} ${ready ? "" : "disabled"}><span>Slackに共有済み<br><small>投稿できたことを確認してチェック</small></span></label>${order.slackSharedAt ? `<p>共有確認：${escapeHtml(formatDateTime(order.slackSharedAt))}</p>` : ""}</div></li>
-        <li class="${confirmed ? "done" : order.slackShared ? "current" : ""}"><span class="flowNumber">${confirmed ? "✓" : "3"}</span><div><h3>注文を確定</h3><p>${confirmed ? (isPickupOrder(order) ? (order.delivered ? "注文確定済み・お渡し完了です。" : "注文確定済み・受け取り待ちです。") : "共有と注文確定が完了しました。") : order.slackShared ? "共有確認済みです。最後に下のボタンを押してください。" : "Slack共有済みにチェックすると、確定できます。"}</p><button id="confirmOrderButton" type="button" class="primary" ${confirmed || confirmationError(order) ? "disabled" : ""}>${confirmed ? "✓ 注文確定済み" : "③ 注文を確定する"}</button></div></li>
+<li class="${order.slackShared ? "done" : ready ? "current" : ""}"><span class="flowNumber">${order.slackShared ? "✓" : "2"}</span><div><h3>Slackに共有</h3><p>会社控え・お客様控えを1つのPDFにまとめます。PDFを作成したら、下に表示される「PDFを共有」からSlackへ投稿してください。会社控えは常に日本語です。</p><button id="receiptSlackSharedPrint" type="button" class="secondary" ${ready ? "" : "disabled"}>PDFを作成する</button><label class="flowShareCheck" for="receiptSlackShared"><input id="receiptSlackShared" type="checkbox" ${order.slackShared ? "checked" : ""} ${ready ? "" : "disabled"}><span>Slackに共有済み<br><small>投稿できたことを確認してチェック</small></span></label>${order.slackSharedAt ? `<p>共有確認：${escapeHtml(formatDateTime(order.slackSharedAt))}</p>` : ""}</div></li>
+        <li class="${confirmed ? "done" : order.slackShared ? "current" : ""}"><span class="flowNumber">${confirmed ? "✓" : "3"}</span><div><h3>注文を確定</h3><p>${confirmed ? "共有と注文確定が完了しました。" : order.slackShared ? "共有確認済みです。最後に下のボタンを押してください。" : "Slack共有済みにチェックすると、確定できます。"}</p><button id="confirmOrderButton" type="button" class="primary" ${confirmed || confirmationError(order) ? "disabled" : ""}>${confirmed ? "✓ 注文確定済み" : "③ 注文を確定する"}</button></div></li>
       </ol><p id="confirmationError" class="flowError hidden" role="alert"></p>
     </section>`;
-  $("receiptSlackSharedPrint").addEventListener("click", () => printReceipt({ sharing: true }));
+  $("receiptSlackSharedPrint").addEventListener("click", printReceipt);
   $("receiptSlackSharedPrint").after(pdfOutput);
-  $("receiptSlackSharedPrint").insertAdjacentHTML("beforebegin", attachmentPickerHtml(order, ready));
-  bindAttachmentPicker(order);
   $("receiptSlackShared").addEventListener("change", async () => {
     if (!ready || state.saving) return;
     await saveReceiptProgress(setSlackShared(state.draft, $("receiptSlackShared").checked), "共有確認を保存しました。最後に「注文を確定する」を押してください。");
@@ -1212,79 +1171,6 @@ function renderReceiptOperations() {
     if (error) return toast(error);
     await saveReceiptProgress(confirmOrder(state.draft), "注文を確定しました。");
   });
-}
-
-function attachmentPickerHtml(order, ready) {
-  const photos = attachmentStore.list(order.localId);
-  const locked = !ready || (needsSlackShare(order) && order.slackShared) || attachmentBusy;
-  return `<div class="attachmentPicker"><h4>別紙・写真を添付（任意）</h4><p>カメラで撮影した写真も注文と一緒に保存します。社内PCで開くと、控え2部の後ろに写真を1枚ずつ付けたPDFを作れます。</p>
-    <div class="attachmentButtons"><button id="choosePhotos" type="button" class="secondary" ${locked || photos.length >= MAX_PHOTOS ? "disabled" : ""}>写真フォルダから選ぶ</button><button id="takePhoto" type="button" class="secondary" ${locked || photos.length >= MAX_PHOTOS ? "disabled" : ""}>カメラで撮影</button></div>
-    <input id="photoFiles" type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif" multiple hidden>
-    <input id="cameraPhoto" type="file" accept="image/*" capture="environment" hidden>
-    <p>最大${MAX_PHOTOS}枚・原本は送らずJPEGへ変換して非公開保存します。写真に住所やお名前が写る場合も、ログイン済みスタッフだけが閲覧できます。</p>
-    ${needsSlackShare(order) && order.slackShared ? '<p>写真を変更する場合は、先に「Slackに共有済み」のチェックを外してください。</p>' : ""}
-    <div class="attachmentList">${photos.map((photo, index) => `<div class="attachmentItem"><details><summary><img src="${photo.url}" alt="添付写真 ${index + 1}"><span>写真${index + 1}を大きく確認</span></summary><img class="attachmentLarge" src="${photo.url}" alt="${escapeHtml(photo.name)}"></details><button type="button" class="secondary" data-remove-photo="${photo.id}" ${locked ? "disabled" : ""}>写真${index + 1}を削除</button></div>`).join("")}</div>
-    <p id="attachmentStatus" role="status">${photos.length}枚添付済み</p></div>`;
-}
-
-function attachmentPagesHtml(order) {
-  return `<div class="shareAttachmentPages">${attachmentStore.list(order.localId).map((photo, index) => `<section class="shareAttachmentPage"><div class="receiptCopyLabel">会社控え・添付資料 ${index + 1}</div><p>注文番号 ${escapeHtml(orderNumber(order))}${pickupNumber(order) ? ` ／ お渡し番号 ${escapeHtml(pickupNumber(order))}` : ""}</p><img src="${photo.url}" alt="添付資料 ${index + 1}"></section>`).join("")}</div>`;
-}
-
-function bindAttachmentPicker(order) {
-  $("choosePhotos").addEventListener("click", () => $("photoFiles").click());
-  $("takePhoto").addEventListener("click", () => $("cameraPhoto").click());
-  for (const id of ["photoFiles", "cameraPhoto"]) $(id).addEventListener("change", async event => {
-    const files = [...event.target.files];
-    event.target.value = "";
-    if (!files.length || attachmentBusy || state.draft?.localId !== order.localId || (needsSlackShare(state.draft) && state.draft.slackShared)) return;
-    attachmentBusy = true;
-    const generation = attachmentStore.generation;
-    const controls = [...document.querySelectorAll("#receiptView button,#receiptView input")].map(control => [control,control.disabled]);
-    controls.forEach(([control]) => { control.disabled = true; });
-    $("attachmentStatus").textContent = "写真を読み込んでいます…";
-    const errors = [];
-    try {
-      for (const file of files) {
-        if (attachmentStore.generation !== generation) break;
-        if (attachmentStore.list(order.localId).length >= MAX_PHOTOS) { errors.push(`最大${MAX_PHOTOS}枚までです。残りの写真は追加していません。`); break; }
-        try {
-          const photo = await preparePhoto(file);
-          try {
-            if (!isLocalDemo) photo.path = await uploadOrderPhoto(supabase.storage, order.localId, photo);
-            delete photo.blob;
-            attachmentStore.add(order.localId, photo, generation);
-          } catch (error) {
-            URL.revokeObjectURL(photo.url);
-            throw error;
-          }
-        } catch (error) { errors.push(`${file.name}: ${error.message}`); }
-      }
-    } finally {
-      attachmentBusy = false;
-      controls.forEach(([control,disabled]) => { control.disabled = disabled; });
-      if (state.draft?.localId === order.localId) {
-        renderReceipt();
-        $("attachmentStatus").textContent = `${attachmentStore.list(order.localId).length}枚添付済み。${errors.join(" ") || "写真を開いて文字が読めるか確認してください。"}`;
-      }
-    }
-  });
-  document.querySelectorAll("[data-remove-photo]").forEach(button => button.addEventListener("click", async () => {
-    if (state.draft?.localId !== order.localId || (needsSlackShare(state.draft) && state.draft.slackShared) || attachmentBusy) return;
-    const photo = attachmentStore.list(order.localId).find(item => item.id === button.dataset.removePhoto);
-    if (!photo) return;
-    attachmentBusy = true;
-    button.disabled = true;
-    try {
-      if (!isLocalDemo) await deleteOrderPhoto(supabase.storage, photo);
-      attachmentStore.remove(order.localId, photo.id);
-      renderReceipt();
-    } catch (error) {
-      console.error("写真の削除エラー", error);
-      toast("写真を削除できませんでした。通信を確認してください。");
-      button.disabled = false;
-    } finally { attachmentBusy = false; }
-  }));
 }
 
 async function saveReceiptProgress(next, successMessage) {
@@ -1336,10 +1222,6 @@ function bindStaticEvents() {
   $("backToHistoryButton").addEventListener("click", showHistory);
   $("refreshOrders").addEventListener("click", () => isLocalDemo ? renderHistory() : syncOrders());
   $("orderSearch").addEventListener("input", renderHistory);
-  document.querySelectorAll("[data-order-filter]").forEach(button => button.addEventListener("click", () => {
-    state.historyFilter = button.dataset.orderFilter;
-    renderHistory();
-  }));
   $("resetPickupCounter").addEventListener("click", resetPickupCounter);
   $("pickupCounterStatus").closest("details").addEventListener("toggle", event => {
     if (!event.target.open || !state.profile) return;
