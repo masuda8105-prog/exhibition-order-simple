@@ -81,7 +81,9 @@ test("控えに現金・クレジットを表示し、ご案内定型文は出�
     state.draft.notes = "";
     render();
     assert.ok(!card.innerHTML.includes("会計方法:"));
-    assert.ok(!card.innerHTML.includes('class="receiptNote"'));
+    assert.ok(card.innerHTML.includes('class="receiptNote"'));
+    assert.ok(card.innerHTML.includes("備考"));
+    assert.ok(!card.innerHTML.includes("ご案内"));
     assert.ok(!card.innerHTML.includes('lang="en"'));
   }
 });
@@ -93,7 +95,7 @@ test("全注文区分で会社控えを先に出し、両控えで番号・金�
     yen: value => `¥${value}`, logoUrl: "test.jpg",
   });
   for (const type of ['normal','spot']) for (const handoff of ['now','later','hotel','ship']) {
-    const draft = {type,handoff,customerRegion:'overseas',staff:'試験',pickupNumber:'17',pickupDate:'2026-09-17',items:[{code:'TEST',name:'試験',qty:2,price:100}]};
+    const draft = {type,handoff,customerRegion:'overseas',staff:'試験',account:'試験帳合先',notes:'連絡事項',pickupNumber:'17',pickupDate:'2026-09-17',items:[{code:'TEST',name:'試験',qty:2,price:100}]};
     const before = JSON.stringify(draft);
     const company = render(draft,new Date('2026-09-16T01:00:00Z'),true);
     const customer = render(draft,new Date('2026-09-16T01:00:00Z'),false);
@@ -102,6 +104,9 @@ test("全注文区分で会社控えを先に出し、両控えで番号・金�
     for (const html of [company,customer]) {
       assert.ok(html.includes('260916-TEST'));
       assert.ok(html.includes('¥200'));
+      assert.ok(html.includes('試験帳合先'));
+      assert.ok(html.includes('連絡事項'));
+      assert.ok(!html.includes('ご案内'));
       assert.equal(html.includes('JEX-17'),type === 'spot' && handoff === 'later');
     }
     assert.ok(!company.includes('Scheduled pickup:'));
@@ -115,10 +120,12 @@ test("全注文区分で会社控えを先に出し、両控えで番号・金�
 test("通常は2部、Slack用は2部と添付写真を印刷し、画像の読込みを待つ", async () => {
   const modes = [];
   let decoded = 0;
+  let photos = [];
   const document = { body: { dataset: {} }, fonts: { ready: Promise.resolve() }, querySelectorAll: () => [] };
   const state = { draft: { type: 'spot', handoff: 'later', pickupNumber: '3' } };
   const print = runInNewContext(`async ${appFunction('printReceipt')}; printReceipt`, {
     ...domain, state, document, attachmentBusy: false,
+    attachmentStore: { list: () => photos },
     $: () => ({ querySelectorAll: selector => (selector.includes('Logo') ? [1,2] : [1]).map(() => ({decode:async () => { decoded++; }})) }),
     createOrderPdf: async (_card, sharing) => { modes.push(sharing ? 'sharing' : 'both'); return {blob:{},pages:2}; },
     offerOrderPdf: () => {}, orderNumber: () => 'TEST', toast: () => {},
@@ -127,9 +134,34 @@ test("通常は2部、Slack用は2部と添付写真を印刷し、画像の読�
   await print();
   assert.deepEqual(modes,['sharing','both']);
   assert.equal(decoded,5);
+  photos = [{ id: 'photo' }];
+  await print();
+  assert.deepEqual(modes,['sharing','both','sharing']);
   state.draft.pickupNumber = '';
   await print();
-  assert.equal(modes.length,2);
+  assert.equal(modes.length,3);
+});
+
+test("お客様控え画像は印刷用の控えを元に作って共有する", async () => {
+  const calls = [];
+  const button = { disabled: false };
+  const card = { id: 'receiptCard' };
+  const blob = new Blob(['png'], { type: 'image/png' });
+  const share = runInNewContext(`async ${appFunction('shareCustomerCopy')}; shareCustomerCopy`, {
+    attachmentBusy: false, printReceipt: { busy: false },
+    $: id => id === 'customerImageButton' ? button : card,
+    document: { fonts: { ready: Promise.resolve() } },
+    state: { draft: { localId: 'test' } },
+    createCustomerImage: async source => { assert.equal(source, card); calls.push('image'); return blob; },
+    shareCustomerImage: async (result, filename) => { assert.equal(result, blob); assert.equal(filename, 'お客様控え_TEST.png'); calls.push('share'); },
+    orderNumber: () => 'TEST', toast: () => {}, console,
+  });
+  await share();
+  assert.deepEqual(calls, ['image', 'share']);
+  assert.equal(button.disabled, false);
+  const source = readFileSync(new URL('../order-pdf.js', import.meta.url), 'utf8');
+  assert.ok(source.includes("createPrintFrame(receiptCard, { customerOnly: true })"));
+  assert.ok(source.includes("'.receiptCopy[data-copy=\"customer\"]'"));
 });
 
 test("海外の控えだけ受け渡し方法を英語にする", () => {

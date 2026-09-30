@@ -218,7 +218,8 @@ h2 { margin: 0; }
 .receiptToolbar { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; width: min(900px, 100%); margin: 0 auto 12px; }
 .receiptToolbar h2 { margin-top: 2px; font-size: 19px; }
 .receiptToolbar > span { color: var(--muted); font-size: 11px; }
-.receiptActions { display: grid; grid-template-columns: 1fr 1.5fr; gap: 9px; width: min(520px, 100%); margin: 14px auto 0; }
+.receiptActions { display: grid; grid-template-columns: 1fr 1.4fr 1fr; gap: 9px; width: min(720px, 100%); margin: 14px auto 0; }
+.receiptActions button { white-space: normal; }
 .printedActions { width: min(520px, 100%); margin: 14px auto 0; text-align: center; }
 .printedActions p { color: var(--muted); font-size: 12px; }
 .printPrivacyNotice { width: min(520px, 100%); margin: 14px auto 0; color: var(--muted); font-size: 12px; line-height: 1.6; }
@@ -351,7 +352,8 @@ h2 { margin: 0; }
   .section { padding: 12px; }
   .quickDates button, .seg button { min-width: 0; padding-inline: 6px; }
   .stickyActions { padding-right: 12px; padding-left: 12px; }
-  .receiptActions, .printedActions { grid-template-columns: minmax(0, 1fr) minmax(0, 1.45fr); }
+  .receiptActions { grid-template-columns: 1fr; }
+  .printedActions { grid-template-columns: minmax(0, 1fr) minmax(0, 1.45fr); }
 }
 
 @media (max-width: 360px) {
@@ -382,6 +384,10 @@ h2 { margin: 0; }
   .slackWorkflow .receiptCopiesNotice,
   .slackWorkflow .printPrivacyNotice,
   .slackWorkflow #printButton { display: none; }
+  .slackWorkflow .receiptActions { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media screen and (max-width: 600px) {
   .slackWorkflow .receiptActions { grid-template-columns: 1fr; }
 }
 

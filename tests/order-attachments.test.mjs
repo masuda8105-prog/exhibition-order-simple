@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createAttachmentStore, validatePhoto, MAX_PHOTO_BYTES, MAX_PHOTOS } from '../order-attachments.js';
+import { createAttachmentStore, validatePhoto, MAX_PHOTO_BYTES, MAX_PHOTOS, PHOTO_BUCKET, photoPath, uploadOrderPhoto, downloadOrderPhotos, deleteOrderPhoto } from '../order-attachments.js';
 import { payloadForOrder } from '../order-sync.js';
 import { readFileSync } from 'node:fs';
 
@@ -14,7 +14,7 @@ test('添付写真の形式・サイズを制限し、空ファイルやSVGを�
   assert.ok(validatePhoto({type:'image/jpeg',size:0}));
 });
 
-test('添付写真は注文のクラウドpayloadへ含めず、通常印刷から除外する', () => {
+test('添付写真は注文のクラウドpayloadへ含めず、非公開Storageで注文ごとに扱う', () => {
   const payload=payloadForOrder({type:'spot',attachments:[{url:'blob:private-photo'}]});
   assert.ok(!JSON.stringify(payload).includes('private-photo'));
   const css=readFileSync(new URL('../styles.css',import.meta.url),'utf8');
@@ -23,6 +23,34 @@ test('添付写真は注文のクラウドpayloadへ含めず、通常印刷か�
   assert.ok(!css.includes('.receiptCopy[data-copy="customer"] { display: none'));
   const source=readFileSync(new URL('../app.js',import.meta.url),'utf8');
   assert.ok(source.includes('capture="environment"'));
+  assert.ok(source.includes('uploadOrderPhoto'));
+  assert.ok(source.includes('downloadOrderPhotos'));
+});
+
+test('写真の保存・復元・削除は注文専用のStorageパスを使う', async () => {
+  const orderId = '11111111-1111-4111-8111-111111111111';
+  const photoId = '22222222-2222-4222-8222-222222222222';
+  const path = photoPath(orderId, photoId, 1727660000000);
+  assert.equal(path, `${orderId}/1727660000000-${photoId}.jpg`);
+  const calls = [];
+  const bucket = {
+    upload: async (...args) => { calls.push(['upload', ...args]); return { error: null }; },
+    list: async (...args) => { calls.push(['list', ...args]); return { data: [{ name: `1727660000000-${photoId}.jpg` }], error: null }; },
+    download: async (...args) => { calls.push(['download', ...args]); return { data: new Blob(['photo']), error: null }; },
+    remove: async (...args) => { calls.push(['remove', ...args]); return { error: null }; },
+  };
+  const storage = { from: name => { assert.equal(name, PHOTO_BUCKET); return bucket; } };
+  const uploaded = await uploadOrderPhoto(storage, orderId, { id: photoId, blob: new Blob(['photo']) });
+  assert.ok(uploaded.startsWith(`${orderId}/`));
+  const photos = await downloadOrderPhotos(storage, orderId, () => 'blob:restored');
+  assert.equal(photos.length, 1);
+  assert.equal(photos[0].path, path);
+  assert.equal(photos[0].url, 'blob:restored');
+  await deleteOrderPhoto(storage, photos[0]);
+  assert.deepEqual(calls.map(call => call[0]), ['upload', 'list', 'download', 'remove']);
+  const migration = readFileSync(new URL('../supabase/migrations/20260930000949_private_simple_order_photos.sql', import.meta.url), 'utf8');
+  assert.ok(migration.includes("false, 10485760, array['image/jpeg']"));
+  assert.ok(migration.includes("o.event_name = 'exhibition-order-simple'"));
 });
 
 test('添付は見出しを含めA4の1ページ内に収め、写真を切り取らない', () => {
@@ -57,6 +85,8 @@ test('写真を注文ごとに分離し、枚数超過・削除・終了時にUR
   store.remove('a','0');
   assert.equal(store.list('a').length,MAX_PHOTOS-1);
   assert.equal(store.list('b').length,1);
+  store.replace('b',[{id:'fresh',url:'blob:fresh'}]);
+  assert.ok(revoked.includes('blob:b'));
   const generation=store.generation;
   store.clear();
   assert.equal(store.list('a').length,0);

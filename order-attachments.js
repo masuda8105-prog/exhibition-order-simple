@@ -1,5 +1,6 @@
 export const MAX_PHOTOS = 6;
 export const MAX_PHOTO_BYTES = 20 * 1024 * 1024;
+export const PHOTO_BUCKET = "exhibition-simple-photos";
 
 export function validatePhoto(file) {
   if (!file || file.size <= 0) return "空のファイルは添付できません。";
@@ -28,6 +29,15 @@ export function createAttachmentStore(revoke = url => URL.revokeObjectURL(url)) 
         revoke(photo.url);
         return false;
       }));
+    },
+    replace(id, photos, expectedGeneration = generation) {
+      if (generation !== expectedGeneration) {
+        for (const photo of photos) revoke(photo.url);
+        return false;
+      }
+      for (const photo of this.list(id)) revoke(photo.url);
+      byOrder.set(id, photos);
+      return true;
     },
     clear() {
       for (const photos of byOrder.values()) for (const photo of photos) revoke(photo.url);
@@ -59,8 +69,49 @@ export async function preparePhoto(file) {
     const blob = await new Promise(resolve => canvas.toBlob(resolve, "image/jpeg", 0.92));
     canvas.width = canvas.height = 1;
     if (!blob) throw new Error("写真を処理できませんでした。");
-    return { id: crypto.randomUUID(), name: file.name || "撮影した写真", url: URL.createObjectURL(blob) };
+    return { id: crypto.randomUUID(), name: file.name || "撮影した写真", url: URL.createObjectURL(blob), blob };
   } catch (error) {
     throw new Error(error.message.includes("処理") ? error.message : "この写真を読み込めません。JPEG・PNGで保存し直すか、カメラで撮り直してください。");
   } finally { image.src = ""; URL.revokeObjectURL(source); }
+}
+
+export function photoPath(orderId, photoId, timestamp = Date.now()) {
+  return `${orderId}/${String(timestamp).padStart(13, "0")}-${photoId}.jpg`;
+}
+
+export async function uploadOrderPhoto(storage, orderId, photo) {
+  const path = photoPath(orderId, photo.id);
+  const { error } = await storage.from(PHOTO_BUCKET).upload(path, photo.blob, {
+    contentType: "image/jpeg", cacheControl: "3600", upsert: false,
+  });
+  if (error) throw error;
+  return path;
+}
+
+export async function downloadOrderPhotos(storage, orderId, makeUrl = blob => URL.createObjectURL(blob), revoke = url => URL.revokeObjectURL(url)) {
+  const bucket = storage.from(PHOTO_BUCKET);
+  const { data: files, error } = await bucket.list(orderId, {
+    limit: 100, sortBy: { column: "name", order: "asc" },
+  });
+  if (error) throw error;
+  const photos = [];
+  try {
+    for (const file of files || []) {
+      if (!/^[0-9]{13}-[0-9a-f-]{36}[.]jpg$/.test(file.name)) continue;
+      const path = `${orderId}/${file.name}`;
+      const result = await bucket.download(path);
+      if (result.error) throw result.error;
+      photos.push({ id: file.name, name: "添付写真", path, url: makeUrl(result.data) });
+    }
+    return photos;
+  } catch (error) {
+    for (const photo of photos) revoke(photo.url);
+    throw error;
+  }
+}
+
+export async function deleteOrderPhoto(storage, photo) {
+  if (!photo.path) return;
+  const { error } = await storage.from(PHOTO_BUCKET).remove([photo.path]);
+  if (error) throw error;
 }

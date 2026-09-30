@@ -9,27 +9,33 @@ export function clearGeneratedPdf() {
   document.getElementById("pdfOutput")?.replaceChildren();
 }
 
-// Pagination is part of the PDF, never delegated to Safari's webpage printer.
-export async function createOrderPdf(receiptCard, sharing) {
+function createPrintFrame(receiptCard, { sharing = false, customerOnly = false } = {}) {
   const frame = document.createElement("iframe");
   frame.title = "PDF作成用";
   frame.setAttribute("aria-hidden", "true");
   frame.style.cssText = "position:fixed;left:-10000px;top:0;width:794px;height:1123px;border:0;pointer-events:none";
   document.body.append(frame);
+  const doc = frame.contentDocument;
+  doc.open();
+  doc.write('<!doctype html><html lang="ja"><head><meta charset="utf-8"></head><body><section id="receiptView"><div id="receiptCard"></div></section></body></html>');
+  doc.close();
+  const style = doc.createElement("style");
+  style.textContent = css.replace(/@media print/g, "@media all").replace(/@media screen/g, "@media not all")
+    .replace(/body\s*>\s*\*?:not\(#receiptView\)\s*\{[^}]*\}/g, "")
+    + '\nhtml,body{width:794px!important} #receiptView{width:794px!important}';
+  doc.head.append(style);
+  doc.body.dataset.printCopy = sharing ? "sharing" : "both";
+  const card = doc.getElementById("receiptCard");
+  const selector = customerOnly ? '.receiptCopy[data-copy="customer"]' : ".receiptCopy";
+  for (const node of receiptCard.querySelectorAll(selector)) card.append(node.cloneNode(true));
+  if (sharing && !customerOnly) for (const node of receiptCard.querySelectorAll(".shareAttachmentPage")) card.append(node.cloneNode(true));
+  return { frame, doc, card };
+}
+
+// Pagination is part of the PDF, never delegated to Safari's webpage printer.
+export async function createOrderPdf(receiptCard, sharing) {
+  const { frame, doc, card } = createPrintFrame(receiptCard, { sharing });
   try {
-    const doc = frame.contentDocument;
-    doc.open();
-    doc.write('<!doctype html><html lang="ja"><head><meta charset="utf-8"></head><body><section id="receiptView"><div id="receiptCard"></div></section></body></html>');
-    doc.close();
-    const style = doc.createElement("style");
-    style.textContent = css.replace(/@media print/g, "@media all").replace(/@media screen/g, "@media not all")
-      .replace(/body\s*>\s*\*?:not\(#receiptView\)\s*\{[^}]*\}/g, "")
-      + '\nhtml,body{width:794px!important} #receiptView{width:794px!important}';
-    doc.head.append(style);
-    doc.body.dataset.printCopy = sharing ? "sharing" : "both";
-    const card = doc.getElementById("receiptCard");
-    for (const node of receiptCard.querySelectorAll(".receiptCopy")) card.append(node.cloneNode(true));
-    if (sharing) for (const node of receiptCard.querySelectorAll(".shareAttachmentPage")) card.append(node.cloneNode(true));
     await Promise.all([...card.querySelectorAll("img")].map(img => img.decode()));
     await doc.fonts.ready;
     const pdf = new jsPDF({ unit: "mm", format: "a4", compress: true });
@@ -79,6 +85,43 @@ export async function createOrderPdf(receiptCard, sharing) {
     }
     return { blob: pdf.output("blob"), pages };
   } finally { frame.remove(); }
+}
+
+export async function createCustomerImage(receiptCard) {
+  const { frame, doc, card } = createPrintFrame(receiptCard, { customerOnly: true });
+  try {
+    const node = card.querySelector('.receiptCopy[data-copy="customer"]');
+    if (!node) throw new Error("お客様控えが見つかりません。");
+    await Promise.all([...node.querySelectorAll("img")].map(image => image.decode()));
+    await doc.fonts.ready;
+    const canvas = await html2canvas(node, {
+      scale: 2, backgroundColor: "#ffffff", logging: false,
+      windowWidth: 794, windowHeight: 1123, scrollX: 0, scrollY: 0,
+    });
+    try {
+      if (!canvas.width || !canvas.height) throw new Error("画像を作成できませんでした。");
+      const blob = await new Promise(resolve => canvas.toBlob(resolve, "image/png"));
+      if (!blob) throw new Error("画像を作成できませんでした。");
+      return blob;
+    } finally { canvas.width = canvas.height = 1; }
+  } finally { frame.remove(); }
+}
+
+export async function shareCustomerImage(blob, filename) {
+  const file = new File([blob], filename, { type: "image/png" });
+  if (navigator.canShare?.({ files: [file] })) {
+    try { await navigator.share({ files: [file] }); }
+    catch (error) { if (error.name !== "AbortError") throw error; }
+    return;
+  }
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.append(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 30000);
 }
 
 export function offerOrderPdf({ blob, pages }, filename) {

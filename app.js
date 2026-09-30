@@ -1,8 +1,8 @@
 import { createClient } from "@supabase/supabase-js";
 import logoUrl from "./assets/sun_nishimura_logo.jpg";
 import { clearOrderData } from "./order-privacy.js";
-import { clearGeneratedPdf, createOrderPdf, offerOrderPdf } from "./order-pdf.js";
-import { MAX_PHOTOS, createAttachmentStore, preparePhoto } from "./order-attachments.js";
+import { clearGeneratedPdf, createCustomerImage, createOrderPdf, offerOrderPdf, shareCustomerImage } from "./order-pdf.js";
+import { MAX_PHOTOS, createAttachmentStore, deleteOrderPhoto, downloadOrderPhotos, preparePhoto, uploadOrderPhoto } from "./order-attachments.js";
 import {
   SYNC_EVENT_NAME,
   orderFromRow,
@@ -355,7 +355,23 @@ function formatDateTime(value) {
   }).format(date);
 }
 
-function openSavedOrder(order, { edit = false } = {}) {
+async function openSavedOrder(order, { edit = false } = {}) {
+  if (attachmentBusy) return toast("写真の処理が終わるまでお待ちください。");
+  attachmentBusy = true;
+  try {
+    if (!isLocalDemo) {
+      toast("注文の写真を読み込んでいます…");
+      const generation = attachmentStore.generation;
+      const photos = await downloadOrderPhotos(supabase.storage, order.localId);
+      if (!attachmentStore.replace(order.localId, photos, generation)) return;
+    }
+  } catch (error) {
+    console.error("写真の読込みエラー", error);
+    toast("写真を読み込めませんでした。通信を確認して、注文を開き直してください。");
+    return;
+  } finally {
+    attachmentBusy = false;
+  }
   state.draft = {
     ...order,
     items: (order.items || []).map((item) => ({ ...item })),
@@ -1049,10 +1065,11 @@ async function printReceipt({ sharing = false } = {}) {
   controls.forEach(([control]) => { control.disabled = true; });
   try {
     await Promise.all([...$("receiptCard").querySelectorAll(".receiptBrandLogo")].map(image => image.decode()));
-    if (sharing) await Promise.all([...$("receiptCard").querySelectorAll(".shareAttachmentPage img")].map(image => image.decode()));
+    const includePhotos = sharing || attachmentStore.list(draft.localId).length > 0;
+    if (includePhotos) await Promise.all([...$("receiptCard").querySelectorAll(".shareAttachmentPage img")].map(image => image.decode()));
     await document.fonts.ready;
     toast("PDFを作成しています…");
-    const result = await createOrderPdf($("receiptCard"), sharing);
+    const result = await createOrderPdf($("receiptCard"), includePhotos);
     if (state.draft === draft) {
       offerOrderPdf(result, `注文書_${orderNumber(draft)}.pdf`);
       toast("PDFを作成しました。");
@@ -1064,6 +1081,23 @@ async function printReceipt({ sharing = false } = {}) {
   } finally {
     printReceipt.busy = false;
     controls.forEach(([control, disabled]) => { control.disabled = disabled; });
+  }
+}
+
+async function shareCustomerCopy() {
+  if (attachmentBusy || printReceipt.busy) return toast("写真・PDFの処理が終わるまでお待ちください。");
+  const button = $("customerImageButton");
+  button.disabled = true;
+  try {
+    await document.fonts.ready;
+    const blob = await createCustomerImage($("receiptCard"));
+    toast("お客様控え画像を作成しました。共有先を選んでください。");
+    await shareCustomerImage(blob, `お客様控え_${orderNumber(state.draft)}.png`);
+  } catch (error) {
+    console.error("お客様控え画像の作成エラー", error);
+    toast("お客様控えの画像を作成できませんでした。もう一度お試しください。");
+  } finally {
+    button.disabled = false;
   }
 }
 
@@ -1108,7 +1142,7 @@ function receiptCopyHtml(draft, date, companyCopy) {
   if (draft.type === ORDER_TYPE.SPOT) info.push([t("会計方法", "Payment method"), payment]);
   const rows = draft.items.map((item) => `
     <tr><td><b>${escapeHtml(isShipping(item) ? t(item.code, "Shipping") : item.code)}</b></td><td>${escapeHtml(isShipping(item) ? t(item.name, "Flat-rate shipping") : item.name)}</td><td class="num" data-label="${t("数量", "Qty")}">${item.qty}</td><td class="num" data-label="${t("単価", "Unit price")}">${yen(item.price)}</td><td class="num"><b>${yen(item.price * item.qty)}</b></td></tr>`).join("");
-  const notesHtml = draft.notes ? `<div class="receiptNote"><b>${t("備考", "Notes")}</b>${escapeHtml(draft.notes).replace(/\n/g, "<br>")}</div>` : "";
+  const notesHtml = `<div class="receiptNote"><b>${t("備考", "Notes")}</b>${draft.notes ? escapeHtml(draft.notes).replace(/\n/g, "<br>") : '<div class="receiptBlankLines"></div>'}</div>`;
   return `<article class="receiptSheet receiptCopy" data-copy="${companyCopy ? "company" : "customer"}" lang="${english ? "en" : "ja"}" aria-label="${copyLabel}">
     <div class="receiptCopyLabel">${copyLabel}</div>
     <div class="receiptHeaderSimple">
@@ -1140,6 +1174,7 @@ function renderReceiptOperations() {
   panel.after(pdfOutput);
   const order = state.draft;
   const required = needsSlackShare(order);
+  $("printButton").textContent = attachmentStore.list(order.localId).length ? "2部＋写真をPDF" : "2部を印刷";
   $("receiptView").classList.toggle("slackWorkflow", required);
   const confirmed = isOrderConfirmed(order);
   const ready = Boolean(order.editingId && (!isPickupOrder(order) || pickupNumber(order)));
@@ -1149,7 +1184,11 @@ function renderReceiptOperations() {
     ? "一時保存済み・まだ注文は確定していません。印刷してSlackに共有した後、上の「注文を確定」を押してください。"
     : "この注文は確定・保存済みです。印刷画面を閉じても入力内容は消えません。";
   $("printedActions").querySelector("p").textContent = required && !confirmed ? "次の注文へ進む前に、Slack共有と注文確定を済ませてください。" : "注文内容は保存されています。";
-  if (!required) { panel.innerHTML = ""; return; }
+  if (!required) {
+    panel.innerHTML = attachmentPickerHtml(order, ready);
+    bindAttachmentPicker(order);
+    return;
+  }
   panel.innerHTML = `
     <section class="confirmationFlow" aria-label="注文確定までの手順">
       <div class="confirmationHeading"><h2>${confirmed ? "注文確定済み" : "あと少しで注文完了"}</h2><span class="confirmationStatus ${confirmed ? "done" : ""}">${confirmed ? "確定済み" : "未確定・一時保存"}</span></div>
@@ -1177,13 +1216,13 @@ function renderReceiptOperations() {
 
 function attachmentPickerHtml(order, ready) {
   const photos = attachmentStore.list(order.localId);
-  const locked = !ready || order.slackShared || attachmentBusy;
-  return `<div class="attachmentPicker"><h4>別紙・写真を添付（任意）</h4><p>ホテル送りの記入用紙などを追加できます。共有用PDFの控えの後ろに、写真1枚につき1ページで添付します。</p>
+  const locked = !ready || (needsSlackShare(order) && order.slackShared) || attachmentBusy;
+  return `<div class="attachmentPicker"><h4>別紙・写真を添付（任意）</h4><p>カメラで撮影した写真も注文と一緒に保存します。社内PCで開くと、控え2部の後ろに写真を1枚ずつ付けたPDFを作れます。</p>
     <div class="attachmentButtons"><button id="choosePhotos" type="button" class="secondary" ${locked || photos.length >= MAX_PHOTOS ? "disabled" : ""}>写真フォルダから選ぶ</button><button id="takePhoto" type="button" class="secondary" ${locked || photos.length >= MAX_PHOTOS ? "disabled" : ""}>カメラで撮影</button></div>
     <input id="photoFiles" type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif" multiple hidden>
     <input id="cameraPhoto" type="file" accept="image/*" capture="environment" hidden>
-    <p>最大${MAX_PHOTOS}枚・1枚20MBまで。写真はこの端末内のみです。再読み込み・ログアウト・新しい注文で消えるため、先にPDF保存・共有してください。</p>
-    ${order.slackShared ? '<p>写真を変更する場合は、先に「Slackに共有済み」のチェックを外してください。</p>' : ""}
+    <p>最大${MAX_PHOTOS}枚・原本は送らずJPEGへ変換して非公開保存します。写真に住所やお名前が写る場合も、ログイン済みスタッフだけが閲覧できます。</p>
+    ${needsSlackShare(order) && order.slackShared ? '<p>写真を変更する場合は、先に「Slackに共有済み」のチェックを外してください。</p>' : ""}
     <div class="attachmentList">${photos.map((photo, index) => `<div class="attachmentItem"><details><summary><img src="${photo.url}" alt="添付写真 ${index + 1}"><span>写真${index + 1}を大きく確認</span></summary><img class="attachmentLarge" src="${photo.url}" alt="${escapeHtml(photo.name)}"></details><button type="button" class="secondary" data-remove-photo="${photo.id}" ${locked ? "disabled" : ""}>写真${index + 1}を削除</button></div>`).join("")}</div>
     <p id="attachmentStatus" role="status">${photos.length}枚添付済み</p></div>`;
 }
@@ -1198,7 +1237,7 @@ function bindAttachmentPicker(order) {
   for (const id of ["photoFiles", "cameraPhoto"]) $(id).addEventListener("change", async event => {
     const files = [...event.target.files];
     event.target.value = "";
-    if (!files.length || attachmentBusy || state.draft?.localId !== order.localId || state.draft.slackShared) return;
+    if (!files.length || attachmentBusy || state.draft?.localId !== order.localId || (needsSlackShare(state.draft) && state.draft.slackShared)) return;
     attachmentBusy = true;
     const generation = attachmentStore.generation;
     const controls = [...document.querySelectorAll("#receiptView button,#receiptView input")].map(control => [control,control.disabled]);
@@ -1209,8 +1248,17 @@ function bindAttachmentPicker(order) {
       for (const file of files) {
         if (attachmentStore.generation !== generation) break;
         if (attachmentStore.list(order.localId).length >= MAX_PHOTOS) { errors.push(`最大${MAX_PHOTOS}枚までです。残りの写真は追加していません。`); break; }
-        try { attachmentStore.add(order.localId, await preparePhoto(file), generation); }
-        catch (error) { errors.push(`${file.name}: ${error.message}`); }
+        try {
+          const photo = await preparePhoto(file);
+          try {
+            if (!isLocalDemo) photo.path = await uploadOrderPhoto(supabase.storage, order.localId, photo);
+            delete photo.blob;
+            attachmentStore.add(order.localId, photo, generation);
+          } catch (error) {
+            URL.revokeObjectURL(photo.url);
+            throw error;
+          }
+        } catch (error) { errors.push(`${file.name}: ${error.message}`); }
       }
     } finally {
       attachmentBusy = false;
@@ -1221,10 +1269,21 @@ function bindAttachmentPicker(order) {
       }
     }
   });
-  document.querySelectorAll("[data-remove-photo]").forEach(button => button.addEventListener("click", () => {
-    if (state.draft?.localId !== order.localId || state.draft.slackShared || attachmentBusy) return;
-    attachmentStore.remove(order.localId,button.dataset.removePhoto);
-    renderReceipt();
+  document.querySelectorAll("[data-remove-photo]").forEach(button => button.addEventListener("click", async () => {
+    if (state.draft?.localId !== order.localId || (needsSlackShare(state.draft) && state.draft.slackShared) || attachmentBusy) return;
+    const photo = attachmentStore.list(order.localId).find(item => item.id === button.dataset.removePhoto);
+    if (!photo) return;
+    attachmentBusy = true;
+    button.disabled = true;
+    try {
+      if (!isLocalDemo) await deleteOrderPhoto(supabase.storage, photo);
+      attachmentStore.remove(order.localId, photo.id);
+      renderReceipt();
+    } catch (error) {
+      console.error("写真の削除エラー", error);
+      toast("写真を削除できませんでした。通信を確認してください。");
+      button.disabled = false;
+    } finally { attachmentBusy = false; }
   }));
 }
 
@@ -1299,6 +1358,7 @@ function bindStaticEvents() {
     button.disabled = true;
     try { await printReceipt(); } finally { button.disabled = false; }
   });
+  $("customerImageButton").addEventListener("click", shareCustomerCopy);
   window.addEventListener("online", () => {
     if (!state.authUserId && supabase && !isLocalDemo) restoreSession();
     else syncOrders({ quiet: true });
