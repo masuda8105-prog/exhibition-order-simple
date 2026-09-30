@@ -39,6 +39,24 @@ test("注文履歴は状態別に分けず税込合計を表示する", () => {
   assert.doesNotMatch(html, /data-order-filter/);
 });
 
+test("トップは新しい注文を主役にし、履歴は操作時だけ開く", () => {
+  const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+  assert.match(html, /id="historyPanel" class="historyPanel hidden"/);
+  assert.match(html, /id="showHistoryButton"[^>]*aria-expanded="false"/);
+  assert.match(html, /id="newOrderButton"[^>]*>＋ 新しい注文/);
+  const history = { hidden: true, classList: { toggle(name, hidden) { this.hidden = hidden; }, contains() { return this.hidden; } } };
+  const toggle = { expanded: '', firstChild: { textContent: '' }, setAttribute(name, value) { this.expanded = value; } };
+  const setVisible = runInNewContext(`${appFunction('setHistoryVisible')}; setHistoryVisible`, {
+    $: id => id === 'historyPanel' ? history : toggle,
+  });
+  setVisible(true);
+  assert.equal(toggle.expanded, 'true');
+  assert.equal(history.classList.hidden, false);
+  setVisible(false);
+  assert.equal(toggle.expanded, 'false');
+  assert.equal(history.classList.hidden, true);
+});
+
 test("通常注文の確認にも税抜・税込合計を出し写真入力は設けない", () => {
   assert.match(source, /<span>税抜合計<\/span>/);
   assert.match(source, /<span>税込合計（10％）<\/span>/);
@@ -77,10 +95,11 @@ test("候補タップは検索・候補DOM・フォーカスを維持して枝�
 
 test("控えに現金・クレジットを表示し、ご案内定型文は出さない", () => {
   for (const [method, expected] of [["cash", "現金"], ["credit", "クレジット"], ["", "未設定"]]) {
-    const card = { innerHTML: "", setAttribute() {} };
+    const card = { innerHTML: "", classList: { add() {} }, setAttribute() {} };
+    const other = { classList: { add() {} }, textContent: "" };
     const state = { draft: { type: "spot", paymentMethod: method, items: [], notes: "試験備考" } };
     const render = runInNewContext(`${appFunction("receiptCopyHtml")}\n${appFunction("renderReceipt")}; renderReceipt`, {
-      ...domain, state, $: () => card, orderLabel: () => "現売り", orderNumber: () => "TEST",
+      ...domain, state, $: id => id === "receiptCard" ? card : other, orderLabel: () => "現売り", orderNumber: () => "TEST",
       receiptHandoffLabel: () => "その場渡し", receiptInfo: (label, value) => `${label}:${value}`,
       escapeHtml: (value) => String(value ?? ""), yen: (value) => `¥${value}`, logoUrl: "test.jpg",
       renderReceiptOperations: () => {}, clearGeneratedPdf: () => {},
@@ -172,26 +191,20 @@ test("通常もSlack用も会社控え・お客様控えの2部をPDFにする",
   assert.equal(calls.length,2);
 });
 
-test("お客様控え画像は印刷用の控えを元に作って共有する", async () => {
-  const calls = [];
-  const button = { disabled: false };
-  const card = { id: 'receiptCard' };
-  const blob = new Blob(['png'], { type: 'image/png' });
-  const share = runInNewContext(`async ${appFunction('shareCustomerCopy')}; shareCustomerCopy`, {
-    printReceipt: { busy: false },
-    $: id => id === 'customerImageButton' ? button : card,
-    document: { fonts: { ready: Promise.resolve() } },
-    state: { draft: { localId: 'test' } },
-    createCustomerImage: async source => { assert.equal(source, card); calls.push('image'); return blob; },
-    shareCustomerImage: async (result, filename) => { assert.equal(result, blob); assert.equal(filename, 'お客様控え_TEST.png'); calls.push('share'); },
-    orderNumber: () => 'TEST', toast: () => {}, console,
-  });
-  await share();
-  assert.deepEqual(calls, ['image', 'share']);
-  assert.equal(button.disabled, false);
-  const source = readFileSync(new URL('../order-pdf.js', import.meta.url), 'utf8');
-  assert.ok(source.includes("createPrintFrame(receiptCard, { customerOnly: true })"));
-  assert.ok(source.includes("'.receiptCopy[data-copy=\"customer\"]'"));
+test("保存後はプレビューを閉じ、PDF作成・共有だけを主導線にする", () => {
+  const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+  assert.match(html, /id="receiptCard" class="hidden"/);
+  assert.match(html, /id="previewToggleButton"/);
+  assert.match(html, /id="printButton"[^>]*>PDFを作成/);
+  assert.doesNotMatch(html, /customerImageButton|receiptSlackShared|confirmOrderButton/);
+  assert.doesNotMatch(source, /function shareCustomerCopy|function saveReceiptProgress|Slack共有と注文確定/);
+  const label = runInNewContext(`${appFunction('preparationLabel')}; preparationLabel`, domain);
+  assert.equal(label({type:'normal'}), 'PDFを作成');
+  assert.equal(label({type:'spot',handoff:'now'}), 'PDFを作成');
+  assert.equal(label({type:'spot',handoff:'hotel'}), 'PDFを作成');
+  assert.equal(label({type:'spot',handoff:'ship'}), 'PDFを作成');
+  assert.equal(label({type:'spot',handoff:'later'}), 'お渡し番号を発行');
+  assert.equal(label({type:'spot',handoff:'later',pickupNumber:'1'}), 'PDFを作成');
 });
 
 test("海外の控えだけ受け渡し方法を英語にする", () => {
@@ -204,24 +217,17 @@ test("海外の控えだけ受け渡し方法を英語にする", () => {
   }
 });
 
-test("確定保存の失敗・競合では元の未確定状態に戻し、失敗を表示する", async () => {
-  for (const reason of ["NETWORK_ERROR", "SYNC_CONFLICT"]) {
-    const previous = { submissionState: "pending", slackShared: true };
-    const state = { draft: previous };
-    const controls = [{ disabled: false }, { disabled: true }];
-    const errorLabel = { textContent: "", classList: { remove() {} } };
-    let rendered = 0, toasted = 0;
-    const save = runInNewContext(`async ${appFunction("saveReceiptProgress")}; saveReceiptProgress`, {
-      state, document: { querySelectorAll: () => controls }, $: () => errorLabel,
-      persistCurrentDraft: async () => { throw new Error(reason); },
-      renderReceiptOperations: () => rendered++, toast: () => toasted++,
-    });
-    await save({submissionState: "confirmed", slackShared: true}, "成功");
-    assert.equal(state.draft,previous);
-    assert.equal(controls[0].disabled,false);
-    assert.equal(controls[1].disabled,true);
-    assert.equal(toasted,0);
-    assert.equal(rendered,1);
-    assert.ok(errorLabel.textContent.includes(reason === "SYNC_CONFLICT" ? "別のスタッフ" : "保存できません"));
-  }
+test("PDF画面はお渡し番号だけを追加表示し、確認チェックを置かない", () => {
+  const panel = { innerHTML: '' };
+  const print = { textContent: '' };
+  const notice = { textContent: '' };
+  const render = runInNewContext(`${appFunction('renderReceiptOperations')}; renderReceiptOperations`, {
+    state: { draft: {type:'spot',handoff:'later',pickupNumber:'3'} },
+    $: id => ({receiptOperations:panel,printButton:print,printPrivacyNotice:notice})[id],
+    isPickupOrder: domain.isPickupOrder, pickupNumber: domain.pickupNumber, escapeHtml: String,
+  });
+  render();
+  assert.match(panel.innerHTML, /JEX-3/);
+  assert.equal(print.textContent, 'PDFを作成');
+  assert.doesNotMatch(panel.innerHTML, /Slack|確定|checkbox/);
 });

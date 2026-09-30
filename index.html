@@ -43,32 +43,37 @@
       </div>
     </header>
     <main class="homePanel">
-      <div class="historySummary"><div><small>注文履歴</small><b id="orderCount">0件</b></div><button id="refreshOrders" class="secondary compact" type="button">同期</button></div>
-      <div class="orderSearchWrap"><label class="srOnly" for="orderSearch">注文を検索</label><input id="orderSearch" type="search" placeholder="お渡し番号・店舗名・お客様名・品番で検索" autocomplete="off"></div>
-      <section id="orderHistory" class="orderHistory" aria-label="注文履歴"></section>
-      <details class="orderAdmin"><summary>番号の管理</summary><p>お渡し番号をJEX-1から振り直します。過去の控えと同じ番号になる場合があります。既存注文の番号は変更されません。</p><p id="pickupCounterStatus">次のお渡し番号を確認中…</p><button id="resetPickupCounter" type="button" class="secondary dangerButton">お渡し番号をJEX-1から開始</button></details>
+      <div class="homeStart">
+        <button id="newOrderButton" class="newOrderBtn" type="button">＋ 新しい注文</button>
+        <button id="showHistoryButton" class="historyToggle secondary" type="button" aria-controls="historyPanel" aria-expanded="false">注文履歴を見る <span id="orderCount">0件</span></button>
+      </div>
+      <div id="historyPanel" class="historyPanel hidden">
+        <div class="historySummary"><h2>注文履歴</h2><button id="refreshOrders" class="secondary compact" type="button">同期</button></div>
+        <div class="orderSearchWrap"><label class="srOnly" for="orderSearch">注文を検索</label><input id="orderSearch" type="search" placeholder="お渡し番号・店舗名・お客様名・品番で検索" autocomplete="off"></div>
+        <section id="orderHistory" class="orderHistory" aria-label="注文履歴"></section>
+        <details class="orderAdmin"><summary>番号の管理</summary><p>お渡し番号をJEX-1から振り直します。過去の控えと同じ番号になる場合があります。既存注文の番号は変更されません。</p><p id="pickupCounterStatus">次のお渡し番号を確認中…</p><button id="resetPickupCounter" type="button" class="secondary dangerButton">お渡し番号をJEX-1から開始</button></details>
+      </div>
     </main>
-    <button id="newOrderButton" class="newOrderBtn" type="button">＋ 新しい注文</button>
   </div>
 
   <section id="receiptView" class="receiptPage hidden">
     <div class="receiptToolbar">
       <div>
-        <div class="eyebrow">PRINT PREVIEW</div>
-        <h2>注文書プレビュー</h2>
+        <div class="eyebrow">ORDER PDF</div>
+        <h2>注文書PDF</h2>
       </div>
       <span>A4縦・会社控え＋お客様控え</span>
     </div>
     <div id="receiptOperations"></div>
     <div id="pdfOutput" class="pdfOutput" role="status"></div>
-    <p class="receiptCopiesNotice">印刷は会社控え・お客様控えの2部です。会社控えは常に日本語です。</p>
-    <div id="receiptCard" aria-label="会社控えとお客様控え"></div>
-    <p id="printPrivacyNotice" class="printPrivacyNotice">この注文は共有注文履歴へ保存済みです。印刷画面を閉じても入力内容は消えません。</p>
     <div id="receiptActions" class="receiptActions">
       <button id="backToEditButton" class="secondary" type="button">戻って修正</button>
-      <button id="customerImageButton" class="secondary" type="button">お客様控えを画像で共有</button>
-      <button id="printButton" class="primary" type="button">2部を印刷</button>
+      <button id="previewToggleButton" class="secondary" type="button">控えをプレビュー</button>
+      <button id="printButton" class="primary" type="button">PDFを作成</button>
     </div>
+    <p id="printPrivacyNotice" class="printPrivacyNotice">注文は共有履歴に保存済みです。PDFには会社控え・お客様控えの2部が入ります。</p>
+    <p id="receiptCopiesNotice" class="receiptCopiesNotice hidden">PDFは会社控え・お客様控えの2部です。会社控えは常に日本語です。</p>
+    <div id="receiptCard" class="hidden" aria-label="会社控えとお客様控え"></div>
     <div id="printedActions" class="printedActions">
       <p>注文内容は保存されています。</p>
       <button id="backToHistoryButton" class="secondary" type="button">注文一覧へ</button>

@@ -9,7 +9,7 @@ export function clearGeneratedPdf() {
   document.getElementById("pdfOutput")?.replaceChildren();
 }
 
-function createPrintFrame(receiptCard, { customerOnly = false } = {}) {
+function createPrintFrame(receiptCard) {
   const frame = document.createElement("iframe");
   frame.title = "PDF作成用";
   frame.setAttribute("aria-hidden", "true");
@@ -25,8 +25,7 @@ function createPrintFrame(receiptCard, { customerOnly = false } = {}) {
     + '\nhtml,body{width:794px!important} #receiptView{width:794px!important}';
   doc.head.append(style);
   const card = doc.getElementById("receiptCard");
-  const selector = customerOnly ? '.receiptCopy[data-copy="customer"]' : ".receiptCopy";
-  for (const node of receiptCard.querySelectorAll(selector)) card.append(node.cloneNode(true));
+  for (const node of receiptCard.querySelectorAll(".receiptCopy")) card.append(node.cloneNode(true));
   return { frame, doc, card };
 }
 
@@ -69,43 +68,6 @@ export async function createOrderPdf(receiptCard) {
     }
     return { blob: pdf.output("blob"), pages };
   } finally { frame.remove(); }
-}
-
-export async function createCustomerImage(receiptCard) {
-  const { frame, doc, card } = createPrintFrame(receiptCard, { customerOnly: true });
-  try {
-    const node = card.querySelector('.receiptCopy[data-copy="customer"]');
-    if (!node) throw new Error("お客様控えが見つかりません。");
-    await Promise.all([...node.querySelectorAll("img")].map(image => image.decode()));
-    await doc.fonts.ready;
-    const canvas = await html2canvas(node, {
-      scale: 2, backgroundColor: "#ffffff", logging: false,
-      windowWidth: 794, windowHeight: 1123, scrollX: 0, scrollY: 0,
-    });
-    try {
-      if (!canvas.width || !canvas.height) throw new Error("画像を作成できませんでした。");
-      const blob = await new Promise(resolve => canvas.toBlob(resolve, "image/png"));
-      if (!blob) throw new Error("画像を作成できませんでした。");
-      return blob;
-    } finally { canvas.width = canvas.height = 1; }
-  } finally { frame.remove(); }
-}
-
-export async function shareCustomerImage(blob, filename) {
-  const file = new File([blob], filename, { type: "image/png" });
-  if (navigator.canShare?.({ files: [file] })) {
-    try { await navigator.share({ files: [file] }); }
-    catch (error) { if (error.name !== "AbortError") throw error; }
-    return;
-  }
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = filename;
-  document.body.append(link);
-  link.click();
-  link.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 30000);
 }
 
 export function offerOrderPdf({ blob, pages }, filename) {

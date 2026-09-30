@@ -48,7 +48,7 @@ h2 { margin: 0; }
 .loginBox button { width: 100%; margin-top: 14px; }
 .errorText { min-height: 18px; margin-top: 9px; color: var(--danger); font-size: 12px; line-height: 1.5; }
 
-.app { max-width: 760px; min-height: 100vh; margin: auto; padding-bottom: 92px; }
+.app { max-width: 760px; min-height: 100vh; margin: auto; padding-bottom: 24px; }
 .topbar { position: sticky; top: 0; z-index: 20; padding: 14px 14px 10px; border-bottom: 1px solid rgba(228, 231, 236, .9); background: rgba(244, 246, 248, .96); backdrop-filter: blur(14px); }
 .brandRow { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .sessionLine { display: flex; align-items: center; gap: 6px; margin-top: 8px; color: var(--muted); font-size: 12px; }
@@ -59,7 +59,12 @@ h2 { margin: 0; }
 .sessionLine #syncStatus { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sessionLine #staffName { flex: 0 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .homePanel { padding: 14px; }
+.homeStart { display: grid; gap: 12px; width: min(480px, 100%); margin: clamp(32px, 12vh, 110px) auto 0; }
+.historyToggle { width: 100%; display: flex; justify-content: center; align-items: center; gap: 10px; }
+.historyToggle span { color: var(--muted); font-size: 12px; }
+.historyPanel { margin-top: 32px; }
 .historySummary { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.historySummary h2 { font-size: 18px; }
 .historySummary small { display: block; color: var(--muted); font-size: 11px; font-weight: 850; }
 .historySummary b { display: block; margin-top: 2px; font-size: 22px; }
 .historySummary .compact { min-height: 42px; }
@@ -89,7 +94,7 @@ h2 { margin: 0; }
 .homeCard { margin-top: 18px; padding: 34px 20px; border: 1px solid var(--line); border-radius: 20px; background: #fff; text-align: center; }
 .homeCard h2 { margin-top: 12px; font-size: 18px; }
 .homeCard p { margin-bottom: 0; color: var(--muted); font-size: 13px; }
-.newOrderBtn { position: fixed; z-index: 25; right: max(14px, calc((100vw - 760px) / 2 + 14px)); bottom: max(14px, env(safe-area-inset-bottom)); left: max(14px, calc((100vw - 760px) / 2 + 14px)); height: 58px; border: 0; border-radius: 18px; background: #111827; color: #fff; box-shadow: 0 12px 30px rgba(17, 24, 39, .24); font-size: 16px; font-weight: 950; }
+.newOrderBtn { width: 100%; min-height: 64px; border: 0; border-radius: 18px; background: #111827; color: #fff; box-shadow: 0 12px 30px rgba(17, 24, 39, .18); font-size: 18px; font-weight: 950; }
 
 .sheet { position: fixed; inset: 0; z-index: 50; display: flex; align-items: flex-end; justify-content: center; background: rgba(16, 24, 40, .5); }
 .sheetPanel { width: min(760px, 100%); max-width: 100%; max-height: min(96dvh, 100%); overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; scrollbar-gutter: stable; border-radius: 24px 24px 0 0; background: var(--bg); padding-bottom: calc(18px + env(safe-area-inset-bottom)); }
@@ -362,19 +367,6 @@ h2 { margin: 0; }
   .productKeypadDock { width: 100%; }
   .qty { gap: 4px; }
   .qty button { width: 32px; }
-}
-
-@media screen {
-  .slackWorkflow .receiptToolbar,
-  .slackWorkflow #receiptCard,
-  .slackWorkflow .receiptCopiesNotice,
-  .slackWorkflow .printPrivacyNotice,
-  .slackWorkflow #printButton { display: none; }
-  .slackWorkflow .receiptActions { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-}
-
-@media screen and (max-width: 600px) {
-  .slackWorkflow .receiptActions { grid-template-columns: 1fr; }
 }
 
 /* Browser-generated URL/date headers use the page margin. Keep it empty;

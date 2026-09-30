@@ -1,19 +1,16 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { isPickupOrder, needsSlackShare, setSlackShared, workflowStatus, pickupNumber, prepareOrder, confirmOrder, confirmationError, isOrderConfirmed } from '../order-domain.js';
+import { isPickupOrder, needsSlackShare, workflowStatus, pickupNumber, prepareOrder, isOrderConfirmed } from '../order-domain.js';
 import { orderFromRow, orderMatches, payloadForOrder } from '../order-sync.js';
 
-test('Slackチェックは後日受取・配送だけに表示し、状態と確認日時を保持する', () => {
+test('後日受取・配送の既存データを判定し、保存時はSlackチェックを要求しない', () => {
   for (const handoff of ['later','hotel','ship']) {
-    const draft = {type:'spot',handoff};
+    const draft = {type:'spot',handoff,items:[]};
     assert.equal(needsSlackShare(draft),true);
-    const shared = setSlackShared(draft,true,'2026-09-14T00:00:00Z');
-    assert.equal(workflowStatus(shared),'active');
-    assert.equal(shared.submissionState,'pending');
-    assert.equal(setSlackShared(shared,true,'later').slackSharedAt,shared.slackSharedAt);
-    assert.equal(setSlackShared(shared,false).slackSharedAt,'');
-    assert.equal(workflowStatus(setSlackShared(shared,false)),'active');
-    assert.equal(payloadForOrder(shared).slackShared,true);
+    const prepared = prepareOrder(draft);
+    assert.equal(prepared.submissionState,'confirmed');
+    assert.equal(prepared.slackShared,false);
+    assert.equal(payloadForOrder(prepared).slackShared,false);
   }
   assert.equal(needsSlackShare({type:'normal',handoff:'later'}),false);
   assert.equal(needsSlackShare({type:'spot',handoff:'now'}),false);
@@ -21,46 +18,35 @@ test('Slackチェックは後日受取・配送だけに表示し、状態と確
   assert.equal(workflowStatus({type:'spot',handoff:'later',delivered:true,slackShared:true,pickupNumber:'1'}),'done');
 });
 
-test('番号発行→共有確認→確定が必要で、共有チェックだけでは確定しない', () => {
+test('保存時に直接確定し、後日受取だけは採番後にPDFを作れる', () => {
   for (const handoff of ['later','hotel','ship']) {
     const draft = { type:'spot', handoff, store:'試験', phone:'0', customer:'試験', paymentMethod:'cash', pickupDate:'2026-09-16', shipAddress:'試験住所', items:[{code:'TEST',name:'架空試験',price:1,qty:1}] };
     const prepared = prepareOrder(draft);
-    assert.equal(isOrderConfirmed(prepared),false);
-    assert.throws(()=>confirmOrder(prepared));
-    const saved = {...prepared,localId:'id',editingId:'id'};
-    assert.throws(()=>confirmOrder(saved));
-    const numbered = {...saved,pickupNumber:handoff === 'later' ? '1' : ''};
-    assert.match(confirmationError(numbered),/Slack/);
-    const shared = setSlackShared(numbered,true,'2026-09-15T01:00:00Z');
-    assert.equal(isOrderConfirmed(shared),false);
-    assert.equal(workflowStatus(shared),'active');
-    const confirmed = confirmOrder(shared,'2026-09-15T01:01:00Z');
-    assert.equal(isOrderConfirmed(confirmed),true);
-    assert.equal(workflowStatus(confirmed),handoff === 'later' ? 'waiting' : 'done');
-    const row = orderFromRow({id:'id',simple_pickup_number:handoff === 'later' ? 1 : null,payload:payloadForOrder(confirmed)});
+    assert.equal(prepared.submissionState,'confirmed');
+    assert.equal(prepared.slackShared,false);
+    assert.equal(isOrderConfirmed(prepared),handoff !== 'later');
+    const row = orderFromRow({id:'id',simple_pickup_number:handoff === 'later' ? 1 : null,payload:payloadForOrder(prepared)});
     assert.equal(row.submissionState,'confirmed');
-    assert.equal(row.confirmedAt,'2026-09-15T01:01:00Z');
+    assert.ok(row.confirmedAt);
     assert.equal(isOrderConfirmed(row),true);
-    assert.equal(isOrderConfirmed(setSlackShared(confirmed,false)),false);
-    assert.equal(isOrderConfirmed(prepareOrder({...confirmed,paid:true,delivered:true},confirmed)),true);
+    assert.equal(workflowStatus(row),handoff === 'later' ? 'waiting' : 'done');
+    assert.equal(isOrderConfirmed(prepareOrder({...row,paid:true,delivered:true},row)),true);
     for (const change of [{notes:'変更'},{pickupDate:'2026-09-17'},{items:[{...draft.items[0],qty:2}]}]) {
-      const edited = prepareOrder({...confirmed,...change},confirmed);
+      const edited = prepareOrder({...row,...change},row);
       assert.equal(edited.slackShared,false);
-      assert.equal(edited.confirmedAt,'');
-      assert.equal(isOrderConfirmed(edited),false);
-      assert.equal(edited.pickupNumber,confirmed.pickupNumber);
+      assert.ok(edited.confirmedAt);
+      assert.equal(isOrderConfirmed(edited),true);
+      assert.equal(edited.pickupNumber,row.pickupNumber);
     }
-    const retried = prepareOrder(shared,shared);
-    assert.equal(retried.slackShared,true);
-    assert.equal(retried.submissionState,'pending');
   }
 });
 
-test('従来の確定済み共有注文は書換え不要、未共有の旧注文はチェック後に確定が必要', () => {
+test('従来の確定済み注文は書換え不要で、未確定の旧注文は編集保存時に新方式へ移る', () => {
   const legacy = {type:'spot',handoff:'later',pickupNumber:'4',slackShared:true};
   assert.equal(isOrderConfirmed(legacy),true);
   assert.equal(isOrderConfirmed(prepareOrder(legacy,legacy)),true);
-  assert.equal(isOrderConfirmed(setSlackShared({...legacy,slackShared:false},true)),false);
+  assert.equal(isOrderConfirmed({...legacy,slackShared:false}),false);
+  assert.equal(isOrderConfirmed(prepareOrder({...legacy,slackShared:false},legacy)),true);
   assert.equal(isOrderConfirmed({type:'normal'}),true);
   assert.equal(isOrderConfirmed({type:'spot',handoff:'now'}),true);
 });
