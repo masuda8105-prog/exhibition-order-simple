@@ -47,7 +47,7 @@
       <div class="orderSearchWrap"><label class="srOnly" for="orderSearch">注文を検索</label><input id="orderSearch" type="search" placeholder="お渡し番号・店舗名・お客様名・品番で検索" autocomplete="off"></div>
       <nav id="orderFilters" class="orderFilters" aria-label="注文の状態"><button type="button" data-order-filter="all" class="on">すべて</button><button type="button" data-order-filter="waiting">受け取り待ち</button><button type="button" data-order-filter="active">要対応</button><button type="button" data-order-filter="done">完了</button></nav>
       <section id="orderHistory" class="orderHistory" aria-label="注文履歴"></section>
-      <details class="orderAdmin"><summary>番号の管理</summary><p>お渡し番号を1から振り直します。過去の番号と区別できるよう、次の区切りから「JEX-2-1」の形式になります。</p><p id="pickupCounterStatus">次のお渡し番号を確認中…</p><button id="resetPickupCounter" type="button" class="secondary dangerButton">お渡し番号を1から開始</button></details>
+      <details class="orderAdmin"><summary>番号の管理</summary><p>お渡し番号をJEX-1から振り直します。過去の控えと同じ番号になる場合があります。既存注文の番号は変更されません。</p><p id="pickupCounterStatus">次のお渡し番号を確認中…</p><button id="resetPickupCounter" type="button" class="secondary dangerButton">お渡し番号をJEX-1から開始</button></details>
     </main>
     <button id="newOrderButton" class="newOrderBtn" type="button">＋ 新しい注文</button>
   </div>

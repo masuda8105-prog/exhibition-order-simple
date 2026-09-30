@@ -80,5 +80,9 @@ test('お渡し番号はサーバー列だけを採用し、後日受取にJEX�
   const afterReset = orderFromRow({id:'another-order',simple_pickup_number:22,simple_pickup_run_number:1,simple_pickup_generation:2,payload});
   assert.equal(pickupNumber(afterReset),'JEX-2-1');
   assert.equal(orderMatches(afterReset,'jex-2-1'),true);
+  const restarted = orderFromRow({id:'restarted-order',simple_pickup_number:24,simple_pickup_run_number:1,simple_pickup_generation:5,payload});
+  assert.equal(pickupNumber(restarted),'JEX-1');
+  assert.equal(orderMatches(restarted,'jex-1'),true);
+  assert.equal(pickupNumber({...restarted,pickupGeneration:6}),'JEX-1');
   assert.equal(Object.hasOwn(payloadForOrder(afterReset),'pickupGeneration'),false);
 });

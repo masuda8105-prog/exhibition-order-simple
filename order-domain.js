@@ -54,7 +54,11 @@ export function setSlackShared(order, shared, now = new Date().toISOString()) {
 export function pickupNumber(order) {
   if (!isPickupOrder(order) || !/^[1-9]\d*$/.test(String(order.pickupNumber || ""))) return "";
   const generation = Number(order.pickupGeneration || 1);
-  return generation > 1 ? `JEX-${generation}-${order.pickupNumber}` : `JEX-${order.pickupNumber}`;
+  // Keep previously issued run-prefixed labels unchanged. From the approved
+  // September 2026 restart (run 5), paper labels intentionally restart at 1.
+  return generation > 1 && generation < 5
+    ? `JEX-${generation}-${order.pickupNumber}`
+    : `JEX-${order.pickupNumber}`;
 }
 export const SHIPPING_CODE = "送料";
 export const SHIPPING_PRICE = 600;

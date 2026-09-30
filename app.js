@@ -432,7 +432,7 @@ async function cancelSavedOrder(order) {
 }
 
 function formatNextPickupNumber(counter) {
-  return Number(counter.generation) > 1
+  return Number(counter.generation) > 1 && Number(counter.generation) < 5
     ? `JEX-${counter.generation}-${counter.next_number}`
     : `JEX-${counter.next_number}`;
 }
@@ -449,13 +449,13 @@ async function loadPickupCounterStatus() {
 
 async function resetPickupCounter() {
   if (state.saving) return;
-  const answer = window.prompt("お渡し番号を1から始めます。過去の番号との重複を防ぐため区切り番号が付きます。\n実行するには「リセット」と入力してください。");
+  const answer = window.prompt("次のお渡し番号をJEX-1から始めます。過去の控えと同じ番号になる可能性があります。既存注文の番号は変更しません。\n実行するには「リセット」と入力してください。");
   if (answer !== "リセット") return;
   const button = $("resetPickupCounter");
   button.disabled = true;
   try {
     if (isLocalDemo) {
-      demoPickupGeneration += 1;
+      demoPickupGeneration = Math.max(5, demoPickupGeneration + 1);
       demoPickupCounter = 0;
     } else {
       const { data, error } = await supabase.rpc("reset_simple_pickup_counter", {

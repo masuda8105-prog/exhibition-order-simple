@@ -11,6 +11,13 @@ function appFunction(name) {
   return source.slice(start, source.indexOf("\nfunction ", start + 1));
 }
 
+test("再開後の次のお渡し番号は区切りを付けずJEX-1と表示する", () => {
+  const format = runInNewContext(`${appFunction("formatNextPickupNumber")}; formatNextPickupNumber`);
+  assert.equal(format({generation:4,next_number:2}), "JEX-4-2");
+  assert.equal(format({generation:5,next_number:1}), "JEX-1");
+  assert.equal(format({generation:6,next_number:1}), "JEX-1");
+});
+
 test("候補タップは検索・候補DOM・フォーカスを維持して枝番を連続追加できる", () => {
   const state = { draft: { items: [], productQuery: "893" } };
   const query = { value: "893" };
