@@ -221,7 +221,7 @@ h2 { margin: 0; }
 .receiptToolbar { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; width: min(900px, 100%); margin: 0 auto 12px; }
 .receiptToolbar h2 { margin-top: 2px; font-size: 19px; }
 .receiptToolbar > span { color: var(--muted); font-size: 11px; }
-.receiptActions { display: grid; grid-template-columns: 1fr 1.4fr 1fr; gap: 9px; width: min(720px, 100%); margin: 14px auto 0; }
+.receiptActions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; width: min(520px, 100%); margin: 14px auto 0; }
 .receiptActions button { white-space: normal; }
 .printedActions { width: min(520px, 100%); margin: 14px auto 0; text-align: center; }
 .printedActions p { color: var(--muted); font-size: 12px; }
@@ -239,6 +239,7 @@ h2 { margin: 0; }
 .pdfOutput:empty { display: none; }
 .pdfOutput { width: min(900px,100%); margin: 12px auto; padding: 16px; background: #fff; border: 1px solid #d1d5db; border-radius: 12px; display: flex; flex-wrap: wrap; gap: 10px; }
 .pdfOutput p { flex-basis: 100%; margin: 0; }
+.pdfOutput .shareInstruction { color: #475467; font-size: 13px; line-height: 1.6; }
 .pdfOutput a { display: inline-flex; align-items: center; justify-content: center; text-decoration: none; }
 @media print { .pdfOutput { display: none !important; } }
 .receiptCopiesNotice { width: min(900px, 100%); margin: 0 auto 12px; color: #475467; font-size: 13px; line-height: 1.6; }

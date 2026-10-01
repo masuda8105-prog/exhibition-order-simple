@@ -191,13 +191,16 @@ test("通常もSlack用も会社控え・お客様控えの2部をPDFにする",
   assert.equal(calls.length,2);
 });
 
-test("保存後はプレビューを閉じ、PDF作成・共有だけを主導線にする", () => {
+test("保存後はPDFを自動作成し、プレビュー横に作成ボタンを置かない", () => {
   const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
   assert.match(html, /id="receiptCard" class="hidden"/);
   assert.match(html, /id="previewToggleButton"/);
-  assert.match(html, /id="printButton"[^>]*>PDFを作成/);
-  assert.doesNotMatch(html, /customerImageButton|receiptSlackShared|confirmOrderButton/);
+  assert.doesNotMatch(html, /printButton|customerImageButton|receiptSlackShared|confirmOrderButton/);
   assert.doesNotMatch(source, /function shareCustomerCopy|function saveReceiptProgress|Slack共有と注文確定/);
+  assert.match(source, /window\.scrollTo\(\{ top: 0 \}\);\s*await printReceipt\(\);/);
+  const pdfSource = readFileSync(new URL('../order-pdf.js', import.meta.url), 'utf8');
+  assert.match(pdfSource, /share\.textContent="PDFを共有"/);
+  assert.match(pdfSource, /instruction\.textContent="Slackで宮川さん宛に送信し、PCで印刷してください。"/);
   const label = runInNewContext(`${appFunction('preparationLabel')}; preparationLabel`, domain);
   assert.equal(label({type:'normal'}), 'PDFを作成');
   assert.equal(label({type:'spot',handoff:'now'}), 'PDFを作成');
@@ -219,15 +222,13 @@ test("海外の控えだけ受け渡し方法を英語にする", () => {
 
 test("PDF画面はお渡し番号だけを追加表示し、確認チェックを置かない", () => {
   const panel = { innerHTML: '' };
-  const print = { textContent: '' };
   const notice = { textContent: '' };
   const render = runInNewContext(`${appFunction('renderReceiptOperations')}; renderReceiptOperations`, {
     state: { draft: {type:'spot',handoff:'later',pickupNumber:'3'} },
-    $: id => ({receiptOperations:panel,printButton:print,printPrivacyNotice:notice})[id],
+    $: id => ({receiptOperations:panel,printPrivacyNotice:notice})[id],
     isPickupOrder: domain.isPickupOrder, pickupNumber: domain.pickupNumber, escapeHtml: String,
   });
   render();
   assert.match(panel.innerHTML, /JEX-3/);
-  assert.equal(print.textContent, 'PDFを作成');
   assert.doesNotMatch(panel.innerHTML, /Slack|確定|checkbox/);
 });

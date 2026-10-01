@@ -94,5 +94,9 @@ export function offerOrderPdf({ blob, pages }, filename) {
     finally { share.disabled=false; }
   };
   panel.append(share);
+  const instruction=document.createElement("p");
+  instruction.className="shareInstruction";
+  instruction.textContent="Slackで宮川さん宛に送信し、PCで印刷してください。";
+  panel.append(instruction);
   panel.scrollIntoView({block:"center",behavior:"smooth"});
 }

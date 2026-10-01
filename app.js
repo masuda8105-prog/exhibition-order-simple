@@ -917,7 +917,7 @@ function renderInfoStep() {
       </div>
       <div class="section"><div class="sectionTitle">注文確認</div>${itemSummary}<div class="summaryRow"><span>合計点数</span><b>${totalQuantity(draft.items)}点</b></div><div class="summaryRow"><span>税抜合計</span><b>${yen(totalPrice(draft.items))}</b></div><div class="summaryRow total"><span>税込合計（10％）</span><b>${yen(taxIncludedTotal(draft.items))}</b></div></div>
       ${isPickupOrder(draft) ? `<div class="pickupBadge">お渡し番号 <b>${escapeHtml(pickupNumber(draft) || "下のボタンで発行")}</b></div>` : ""}
-      <div class="hintBox sendHint">${isPickupOrder(draft) && !pickupNumber(draft) ? "保存してお渡し番号を発行します。次の画面でPDFを作成・共有できます。" : "保存してPDFを作成します。次の画面から共有できます。プレビューは必要なときだけ開けます。"}</div>
+      <div class="hintBox sendHint">${isPickupOrder(draft) && !pickupNumber(draft) ? "保存してお渡し番号を発行し、PDFを作成します。次の画面から共有できます。" : "保存してPDFを作成します。次の画面から共有できます。プレビューは必要なときだけ開けます。"}</div>
       ${draft.paymentMethod === PAYMENT.CASH ? '<div class="hintBox topGap">現金は受取金額を確認してください。</div>' : ""}
     </div>
     <div class="stickyActions"><button id="backType" class="secondary" type="button">戻る</button><button id="previewOrder" class="primary" type="button">${preparationLabel(draft)}</button></div>`;
@@ -964,7 +964,6 @@ function bindInfoStep(normal, now) {
     if (now) state.draft.paid = true;
     const error = validateDraft(state.draft);
     if (error) return showError(error);
-    const issuingPickupNumber = isPickupOrder(state.draft) && !pickupNumber(state.draft);
     state.draft = prepareOrder(state.draft, state.orders.find(order => order.localId === state.draft.editingId));
     const button = $("previewOrder");
     button.disabled = true;
@@ -981,7 +980,7 @@ function bindInfoStep(normal, now) {
       $("receiptActions").classList.remove("hidden");
       $("printedActions").classList.remove("hidden");
       window.scrollTo({ top: 0 });
-      if (!issuingPickupNumber) await printReceipt();
+      await printReceipt();
     } catch (saveError) {
       console.error(saveError);
       showError(saveError.message === "SYNC_CONFLICT" ? "別の端末で先に変更されました。注文一覧から開き直してください。" : "注文を保存できませんでした。通信を確認して、もう一度お試しください。");
@@ -1019,7 +1018,7 @@ function saveLocalDemoDraft(nowIso = new Date().toISOString()) {
 async function printReceipt() {
   if (printReceipt.busy) return;
   if (isPickupOrder(state.draft) && !pickupNumber(state.draft)) {
-    toast("お渡し番号を発行するため「戻って修正」から保存してください。");
+    $("pdfOutput").textContent = "お渡し番号が未発行です。「戻って修正」から保存して発行してください。";
     return;
   }
   printReceipt.busy = true;
@@ -1038,7 +1037,16 @@ async function printReceipt() {
   } catch (error) {
     console.error("PDF作成エラー", error.message);
     delete document.body.dataset.printCopy;
-    toast("PDFを作成できませんでした。通信を確認して再度お試しください。");
+    const panel = $("pdfOutput");
+    const message = document.createElement("p");
+    message.textContent = "PDFを作成できませんでした。通信を確認して再度お試しください。";
+    const retry = document.createElement("button");
+    retry.type = "button";
+    retry.className = "primary";
+    retry.textContent = "PDFを再作成";
+    retry.addEventListener("click", printReceipt);
+    panel.replaceChildren(message, retry);
+    toast(message.textContent);
   } finally {
     printReceipt.busy = false;
     controls.forEach(([control, disabled]) => { control.disabled = disabled; });
@@ -1120,7 +1128,6 @@ function renderReceiptOperations() {
   panel.innerHTML = isPickupOrder(order)
     ? `<div class="pickupBadge">お渡し番号 <b>${escapeHtml(pickupNumber(order) || "未発行")}</b></div>`
     : "";
-  $("printButton").textContent = "PDFを作成";
   $("printPrivacyNotice").textContent = "注文は共有履歴に保存済みです。PDFには会社控え・お客様控えの2部が入ります。";
 }
 
@@ -1164,11 +1171,6 @@ function bindStaticEvents() {
     state.draft.stage = "info";
     openSheet();
     renderDraft();
-  });
-  $("printButton").addEventListener("click", async () => {
-    const button = $("printButton");
-    button.disabled = true;
-    try { await printReceipt(); } finally { button.disabled = false; }
   });
   $("previewToggleButton").addEventListener("click", () => {
     const hidden = $("receiptCard").classList.toggle("hidden");
