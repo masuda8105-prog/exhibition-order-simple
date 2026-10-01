@@ -1057,23 +1057,6 @@ function receiptInfo(label, value) {
   return `<div class="receiptInfoCard"><div class="receiptInfoLabel">${escapeHtml(label)}</div><div class="receiptInfoValue">${escapeHtml(value || "-")}</div></div>`;
 }
 
-function receiptHandoffLabel(order) {
-  if (order.customerRegion === "overseas") {
-    if (order.type === ORDER_TYPE.NORMAL) return "Processed after the exhibition";
-    if (order.handoff === HANDOFF.NOW) return "Pay and collect at the venue";
-    if (order.handoff === HANDOFF.LATER) return order.pickupDate ? `Scheduled pickup: ${order.pickupDate}` : "Later pickup";
-    if (order.handoff === HANDOFF.HOTEL) return `Hotel delivery${order.hotelName ? ` (${order.hotelName})` : ""}`;
-    if (order.handoff === HANDOFF.SHIP) return "Delivery to specified address";
-    return "-";
-  }
-  if (order.type === ORDER_TYPE.NORMAL) return "帰社後にまとめて印刷";
-  if (order.handoff === HANDOFF.NOW) return "その場で会計・お渡し";
-  if (order.handoff === HANDOFF.LATER) return order.pickupDate ? `${order.pickupDate} 受取予定` : "後日受取";
-  if (order.handoff === HANDOFF.HOTEL) return `本社対応・ホテル配送${order.hotelName ? `（${order.hotelName}）` : ""}`;
-  if (order.handoff === HANDOFF.SHIP) return "本社対応・指定先配送";
-  return "-";
-}
-
 function renderReceipt() {
   clearGeneratedPdf();
   const draft = state.draft;
@@ -1089,11 +1072,10 @@ function receiptCopyHtml(draft, date, companyCopy) {
   const english = !companyCopy && draft.customerRegion === "overseas";
   const t = (ja, en) => english ? en : ja;
   const copyLabel = companyCopy ? "会社控え" : t("お客様控え", "Customer Copy / お客様控え");
-  const handoffOrder = companyCopy ? { ...draft, customerRegion: "domestic" } : draft;
   const company = t("株式会社サンニシムラ", "SAN NISHIMURA CO., LTD.");
   const typeLabel = english ? (draft.type === ORDER_TYPE.NORMAL ? "Standard order" : "On-site sale") : orderLabel(draft);
   const payment = english ? ({ cash: "Cash", credit: "Credit card" })[draft.paymentMethod] || "Not specified" : paymentLabel(draft.paymentMethod);
-  const info = [[t("店舗名", "Company / Store"), draft.store], [t("電話番号", "Phone"), draft.phone], [t("お客様名", "Customer"), draft.customer || "-"], [t("注文区分", "Order type"), typeLabel], [t("卸屋・帳合先", "Distributor / Account"), draft.account || "-"], [t("担当", "Staff"), draft.staff || state.profile?.display_name || "-"], [t("受け渡し", "Pickup / Delivery"), receiptHandoffLabel(handoffOrder)]];
+  const info = [[t("店舗名", "Company / Store"), draft.store], [t("電話番号", "Phone"), draft.phone], [t("お客様名", "Customer"), draft.customer || "-"], [t("注文区分", "Order type"), typeLabel], [t("卸屋・帳合先", "Distributor / Account"), draft.account || "-"], [t("担当", "Staff"), draft.staff || state.profile?.display_name || "-"]];
   if (draft.type === ORDER_TYPE.SPOT) info.push([t("会計方法", "Payment method"), payment]);
   const rows = draft.items.map((item) => `
     <tr><td><b>${escapeHtml(isShipping(item) ? t(item.code, "Shipping") : item.code)}</b></td><td>${escapeHtml(isShipping(item) ? t(item.name, "Flat-rate shipping") : item.name)}</td><td class="num" data-label="${t("数量", "Qty")}">${item.qty}</td><td class="num" data-label="${t("単価", "Unit price")}">${yen(item.price)}</td><td class="num"><b>${yen(item.price * item.qty)}</b></td></tr>`).join("");

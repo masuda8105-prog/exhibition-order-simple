@@ -100,7 +100,7 @@ test("控えに現金・クレジットを表示し、ご案内定型文は出�
     const state = { draft: { type: "spot", paymentMethod: method, items: [], notes: "試験備考" } };
     const render = runInNewContext(`${appFunction("receiptCopyHtml")}\n${appFunction("renderReceipt")}; renderReceipt`, {
       ...domain, state, $: id => id === "receiptCard" ? card : other, orderLabel: () => "現売り", orderNumber: () => "TEST",
-      receiptHandoffLabel: () => "その場渡し", receiptInfo: (label, value) => `${label}:${value}`,
+      receiptInfo: (label, value) => `${label}:${value}`,
       escapeHtml: (value) => String(value ?? ""), yen: (value) => `¥${value}`, logoUrl: "test.jpg",
       renderReceiptOperations: () => {}, clearGeneratedPdf: () => {},
     });
@@ -143,7 +143,7 @@ test("控えに現金・クレジットを表示し、ご案内定型文は出�
 });
 
 test("全注文区分で会社控えを先に出し、両控えで番号・金額を一致させる", () => {
-  const render = runInNewContext(`${appFunction("receiptHandoffLabel")}\n${appFunction("receiptCopyHtml")}; receiptCopyHtml`, {
+  const render = runInNewContext(`${appFunction("receiptCopyHtml")}; receiptCopyHtml`, {
     ...domain, state: {}, orderLabel: () => "現売り", orderNumber: () => "260916-TEST",
     receiptInfo: (label,value) => `${label}:${value}`, escapeHtml: value => String(value ?? ""),
     yen: value => `¥${value}`, logoUrl: "test.jpg",
@@ -161,10 +161,12 @@ test("全注文区分で会社控えを先に出し、両控えで番号・金�
       assert.ok(html.includes('試験帳合先'));
       assert.ok(html.includes('連絡事項'));
       assert.ok(!html.includes('ご案内'));
+      assert.ok(!html.includes('受け渡し:'));
+      assert.ok(!html.includes('Pickup / Delivery:'));
       assert.equal(html.includes('JEX-17'),type === 'spot' && handoff === 'later');
     }
     assert.ok(!company.includes('Scheduled pickup:'));
-    if(type === 'spot' && handoff === 'later') assert.ok(company.includes('2026-09-17 受取予定'));
+    assert.ok(!company.includes('2026-09-17 受取予定'));
     assert.equal(JSON.stringify(draft),before);
   }
   const css = readFileSync(new URL('../styles.css',import.meta.url),'utf8');
@@ -219,14 +221,9 @@ test("印刷用控えの本文・明細・合計を読める文字サイズに�
   assert.match(print, /\.receiptSummaryRow\.total \{[^}]*font-size: 23px !important;/);
 });
 
-test("海外の控えだけ受け渡し方法を英語にする", () => {
-  const label = runInNewContext(`${appFunction("receiptHandoffLabel")}; receiptHandoffLabel`, domain);
-  for (const [handoff, expected] of [["now", "Pay and collect"], ["later", "Scheduled pickup: 2026-09-16"], ["hotel", "Hotel delivery (入力ホテル)"], ["ship", "Delivery to specified address"]]) {
-    const order = { type: "spot", customerRegion: "overseas", handoff, pickupDate: "2026-09-16", hotelName: "入力ホテル" };
-    assert.ok(label(order).includes(expected));
-    order.customerRegion = "domestic";
-    assert.ok(!label(order).includes(expected));
-  }
+test("控えの情報欄に受け渡し項目を出さず、お渡し番号は維持する", () => {
+  assert.doesNotMatch(appFunction("receiptCopyHtml"), /Pickup \/ Delivery|t\("受け渡し"/);
+  assert.match(appFunction("receiptCopyHtml"), /receiptPickupNumber/);
 });
 
 test("PDF画面はお渡し番号だけを追加表示し、確認チェックを置かない", () => {
