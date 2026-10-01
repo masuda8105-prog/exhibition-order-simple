@@ -164,6 +164,11 @@ test("全注文区分で会社控えを先に出し、両控えで番号・金�
       assert.ok(!html.includes('受け渡し:'));
       assert.ok(!html.includes('Pickup / Delivery:'));
       assert.equal(html.includes('JEX-17'),type === 'spot' && handoff === 'later');
+      assert.equal(html.includes('class="receiptPickupTiming"'),type === 'spot' && handoff === 'later');
+    }
+    if(type === 'spot' && handoff === 'later') {
+      assert.match(company, /お渡し日 2026\/09\/17<\/span><strong>13時以降/);
+      assert.match(customer, /Pickup date 2026\/09\/17<\/span><strong>After 1:00 PM/);
     }
     assert.ok(!company.includes('Scheduled pickup:'));
     assert.ok(!company.includes('2026-09-17 受取予定'));
@@ -224,6 +229,8 @@ test("印刷用控えの本文・明細・合計を読める文字サイズに�
 test("控えの情報欄に受け渡し項目を出さず、お渡し番号は維持する", () => {
   assert.doesNotMatch(appFunction("receiptCopyHtml"), /Pickup \/ Delivery|t\("受け渡し"/);
   assert.match(appFunction("receiptCopyHtml"), /receiptPickupNumber/);
+  const css = readFileSync(new URL('../styles.css', import.meta.url), 'utf8');
+  assert.match(css, /\.receiptPickupTiming \{[^}]*color: #b42318;/);
 });
 
 test("PDF画面はお渡し番号だけを追加表示し、確認チェックを置かない", () => {

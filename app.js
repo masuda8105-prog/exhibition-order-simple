@@ -1071,6 +1071,9 @@ function renderReceipt() {
 function receiptCopyHtml(draft, date, companyCopy) {
   const english = !companyCopy && draft.customerRegion === "overseas";
   const t = (ja, en) => english ? en : ja;
+  const pickupDateText = /^\d{4}-\d{2}-\d{2}$/.test(draft.pickupDate || "")
+    ? draft.pickupDate.replaceAll("-", "/")
+    : t("未設定", "Not set");
   const copyLabel = companyCopy ? "会社控え" : t("お客様控え", "Customer Copy / お客様控え");
   const company = t("株式会社サンニシムラ", "SAN NISHIMURA CO., LTD.");
   const typeLabel = english ? (draft.type === ORDER_TYPE.NORMAL ? "Standard order" : "On-site sale") : orderLabel(draft);
@@ -1090,7 +1093,7 @@ function receiptCopyHtml(draft, date, companyCopy) {
       <div class="receiptDocMeta"><div class="receiptDocTitle">${t("展示会 注文書", "Exhibition Order Receipt")}</div>${english ? "" : '<div class="receiptDocSub">Exhibition Order Receipt</div>'}<div class="receiptMetaLine"><b>${t("注文番号", "Order No.")}</b> ${escapeHtml(orderNumber(draft))}<br><b>${t("作成日時", "Issued (JST)")}</b> ${escapeHtml(new Date(date).toLocaleString(english ? "en-GB" : "ja-JP", { timeZone: "Asia/Tokyo" }))}</div></div>
     </div>
     <div class="receiptInfoBand">${info.map(([label, value]) => receiptInfo(label, value)).join("")}</div>
-    ${isPickupOrder(draft) ? `<div class="receiptPickupNumber"><span>${t("お渡し番号", "Pickup No.")}</span><strong>${escapeHtml(pickupNumber(draft) || t("未発行・保存してください", "Not issued — save the order first"))}</strong><small>${t("お受け取り時に、この番号をご提示ください。", "Please present this number when collecting your order.")}</small></div>` : ""}
+    ${isPickupOrder(draft) ? `<div class="receiptPickupNumber"><span>${t("お渡し番号", "Pickup No.")}</span><strong>${escapeHtml(pickupNumber(draft) || t("未発行・保存してください", "Not issued — save the order first"))}</strong><div class="receiptPickupTiming"><span>${t("お渡し日", "Pickup date")} ${escapeHtml(pickupDateText)}</span><strong>${t("13時以降", "After 1:00 PM")}</strong></div><small>${t("お受け取り時に、この番号をご提示ください。", "Please present this number when collecting your order.")}</small></div>` : ""}
     <div class="receiptSection"><div class="receiptSectionHead"><div class="receiptSectionTitle">${t("注文明細", "Order details")}</div><div class="receiptSectionHint">${totalQuantity(draft.items)}${t("点", " items")}</div></div>
       <table class="receiptTable"><colgroup><col class="code"><col><col class="qty"><col class="unit"><col class="subtotal"></colgroup>
         <thead><tr><th>${t("品番", "Item No.")}</th><th>${t("商品名", "Product")}</th><th class="num">${t("数量", "Qty")}</th><th class="num">${t("単価", "Unit price")}</th><th class="num">${t("金額", "Amount")}</th></tr></thead>

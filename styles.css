@@ -166,9 +166,11 @@ h2 { margin: 0; }
 .pickupBadge { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 10px 0; padding: 10px 12px; border: 2px solid #111827; border-radius: 12px; background: #fff; font-size: 13px; }
 .pickupBadge b { font-size: 24px; overflow-wrap: anywhere; }
 .receiptPickupNumber { display: grid; gap: 3px; margin: 0 0 18px; padding: 12px; border: 3px solid #111827; text-align: center; break-inside: avoid; }
-.receiptPickupNumber strong { font-size: 38px; line-height: 1.2; overflow-wrap: anywhere; }
+.receiptPickupNumber > strong { font-size: 38px; line-height: 1.2; overflow-wrap: anywhere; }
 .receiptPickupNumber small { font-size: 15px; }
-.receiptPickupNumber span { font-size: 17px; font-weight: 850; }
+.receiptPickupNumber > span { font-size: 17px; font-weight: 850; }
+.receiptPickupTiming { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: center; gap: 4px 16px; margin: 7px 0 4px; padding: 9px; border-radius: 8px; background: #fff1f0; color: #b42318; font-size: 23px; font-weight: 950; line-height: 1.35; }
+.receiptPickupTiming strong { color: #b42318; font-size: 25px; font-weight: 950; }
 .productRow.exact { padding: 9px; border: 2px solid #12b76a; background: #ecfdf3; }
 .productCodeLine { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
 .matchBadge { display: inline-flex; align-items: center; min-height: 21px; padding: 2px 7px; border-radius: 99px; background: #067647; color: #fff; font-size: 10px; font-style: normal; font-weight: 950; }
