@@ -210,6 +210,15 @@ test("保存後はPDFを自動作成し、プレビュー横に作成ボタン�
   assert.equal(label({type:'spot',handoff:'later',pickupNumber:'1'}), 'PDFを作成');
 });
 
+test("印刷用控えの本文・明細・合計を読める文字サイズに保つ", () => {
+  const css = readFileSync(new URL('../styles.css', import.meta.url), 'utf8');
+  const print = css.slice(css.indexOf('@media print {\n'));
+  for (const selector of ['.receiptInfoValue', '.receiptTable', '.receiptNote', '.receiptSummaryRow']) {
+    assert.match(print, new RegExp(`${selector.replace('.', '\\.')} \\{[^}]*font-size: 16px !important;`));
+  }
+  assert.match(print, /\.receiptSummaryRow\.total \{[^}]*font-size: 23px !important;/);
+});
+
 test("海外の控えだけ受け渡し方法を英語にする", () => {
   const label = runInNewContext(`${appFunction("receiptHandoffLabel")}; receiptHandoffLabel`, domain);
   for (const [handoff, expected] of [["now", "Pay and collect"], ["later", "Scheduled pickup: 2026-09-16"], ["hotel", "Hotel delivery (入力ホテル)"], ["ship", "Delivery to specified address"]]) {
