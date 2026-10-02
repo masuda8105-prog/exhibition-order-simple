@@ -32,7 +32,7 @@ test("注文履歴は状態別に分けず税込合計を表示する", () => {
   });
   render();
   assert.equal(count.textContent, "1件");
-  assert.match(history.innerHTML, /税込合計<\/small>¥232/);
+  assert.match(history.innerHTML, /税込合計<\/small>¥231/);
   assert.doesNotMatch(history.innerHTML, /受け取り待ち|要対応|完了/);
   const html = readFileSync(new URL("../index.html", import.meta.url), "utf8");
   assert.match(html, /注文履歴/);
@@ -145,8 +145,8 @@ test("控えに現金・クレジットを表示し、ご案内定型文は出�
     assert.ok(card.innerHTML.includes("¥1106"));
     state.draft.items = [{ code: "ROUND", name: "端数確認", price: 105, qty: 2 }];
     render();
-    assert.ok(card.innerHTML.includes("¥22"));
-    assert.ok(card.innerHTML.includes("¥232"));
+    assert.ok(card.innerHTML.includes("¥21"));
+    assert.ok(card.innerHTML.includes("¥231"));
   }
 });
 

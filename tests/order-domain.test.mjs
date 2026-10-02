@@ -37,14 +37,17 @@ test("送料は何度追加しても税抜700円一回だけで、商品点数�
   assert.equal(taxAmount([{ price: 1001, qty: 1 }]), 100);
 });
 
-test("消費税は商品1個ごとに四捨五入して数量分を合算する", () => {
+test("消費税は注文全体の税抜合計に対して四捨五入する", () => {
   assert.equal(taxAmount([{ price: 1004, qty: 1 }]), 100);
   assert.equal(taxAmount([{ price: 1005, qty: 1 }]), 101);
   assert.equal(taxAmount([{ price: 1006, qty: 1 }]), 101);
   assert.equal(taxIncludedTotal([{ price: 1005, qty: 1 }]), 1106);
   assert.equal(taxAmount([{ price: 312, qty: 1 }, { price: 429, qty: 1 }]), 74);
-  assert.equal(taxAmount([{ price: 105, qty: 1 }, { price: 105, qty: 1 }]), 22);
-  assert.equal(taxAmount([{ price: 105, qty: 2 }]), 22);
-  assert.equal(taxIncludedTotal([{ price: 105, qty: 2 }]), 232);
-  assert.equal(taxAmount([{ price: 312, qty: 3 }]), 93);
+  assert.equal(taxAmount([{ price: 105, qty: 1 }, { price: 105, qty: 1 }]), 21);
+  assert.equal(taxAmount([{ price: 105, qty: 2 }]), 21);
+  assert.equal(taxIncludedTotal([{ price: 105, qty: 2 }]), 231);
+  assert.equal(taxAmount([{ price: 312, qty: 3 }]), 94);
+  const order = [{ price: 3000, qty: 1 }, { price: 428, qty: 1 }];
+  assert.equal(taxAmount(order), 343);
+  assert.equal(taxIncludedTotal(order), 3771);
 });
