@@ -93,7 +93,8 @@ export function totalPrice(items = []) {
 }
 
 export function taxAmount(items = []) {
-  return Math.floor(totalPrice(items) * TAX_RATE + 1e-8);
+  return items.reduce((sum, item) =>
+    sum + Math.round(Number(item.price || 0) * TAX_RATE + 1e-8) * Number(item.qty || 0), 0);
 }
 
 export function taxIncludedTotal(items = []) {

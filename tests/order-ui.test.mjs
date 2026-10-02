@@ -23,7 +23,7 @@ test("注文履歴は状態別に分けず税込合計を表示する", () => {
   const count = { textContent: "" };
   const search = { value: "" };
   const render = runInNewContext(`${appFunction("renderHistory")}; renderHistory`, {
-    state: { orders: [{ localId: "one", store: "試験店", items: [{ code: "A", qty: 1, price: 100 }] }] },
+    state: { orders: [{ localId: "one", store: "試験店", items: [{ code: "A", qty: 2, price: 105 }] }] },
     $: id => ({ orderHistory: history, orderCount: count, orderSearch: search })[id],
     orderMatches: () => true, orderNumber: () => "TEST-1", orderLabel: () => "現売り",
     totalQuantity: domain.totalQuantity, taxIncludedTotal: domain.taxIncludedTotal,
@@ -32,7 +32,7 @@ test("注文履歴は状態別に分けず税込合計を表示する", () => {
   });
   render();
   assert.equal(count.textContent, "1件");
-  assert.match(history.innerHTML, /税込合計<\/small>¥110/);
+  assert.match(history.innerHTML, /税込合計<\/small>¥232/);
   assert.doesNotMatch(history.innerHTML, /受け取り待ち|要対応|完了/);
   const html = readFileSync(new URL("../index.html", import.meta.url), "utf8");
   assert.match(html, /注文履歴/);
@@ -139,6 +139,14 @@ test("控えに現金・クレジットを表示し、ご案内定型文は出�
     assert.ok(card.innerHTML.includes("備考"));
     assert.ok(!card.innerHTML.includes("ご案内"));
     assert.ok(!card.innerHTML.includes('lang="en"'));
+    state.draft.items = [{ code: "ROUND", name: "端数確認", price: 1005, qty: 1 }];
+    render();
+    assert.ok(card.innerHTML.includes("¥101"));
+    assert.ok(card.innerHTML.includes("¥1106"));
+    state.draft.items = [{ code: "ROUND", name: "端数確認", price: 105, qty: 2 }];
+    render();
+    assert.ok(card.innerHTML.includes("¥22"));
+    assert.ok(card.innerHTML.includes("¥232"));
   }
 });
 
