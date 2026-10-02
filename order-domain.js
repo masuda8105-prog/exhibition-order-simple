@@ -40,7 +40,7 @@ export function pickupNumber(order) {
     : `JEX-${order.pickupNumber}`;
 }
 export const SHIPPING_CODE = "送料";
-export const SHIPPING_PRICE = 600;
+export const SHIPPING_PRICE = 700;
 export const TAX_RATE = 0.1;
 export function isShipping(item) { return item?.code === SHIPPING_CODE; }
 export function withShipping(items = []) {

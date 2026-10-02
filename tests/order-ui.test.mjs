@@ -121,7 +121,7 @@ test("控えに現金・クレジットを表示し、ご案内定型文は出�
     assert.ok(card.innerHTML.includes("Flat-rate shipping"));
     assert.ok(card.innerHTML.includes("税込合計"));
     assert.ok(card.innerHTML.includes("Total incl. tax"));
-    assert.ok(card.innerHTML.includes("¥770"));
+    assert.ok(card.innerHTML.includes("¥880"));
     assert.ok(card.innerHTML.includes("商品名は原文"));
     assert.ok(card.innerHTML.includes('data-label="Qty"'));
     const [companyHtml, customerHtml] = card.innerHTML.split('</article>');
